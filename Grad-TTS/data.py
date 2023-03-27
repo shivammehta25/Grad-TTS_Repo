@@ -55,7 +55,7 @@ class TextMelDataset(torch.utils.data.Dataset):
     def get_motion(self, filename, mel_shape, ext=".expmap_86.1328125fps.pkl"):
         file_loc = self.motion_fileloc / Path(Path(filename).name).with_suffix(ext)
         motion = torch.from_numpy(pd.read_pickle(file_loc).to_numpy())[::4]
-        motion = F.interpolate(motion.T.unsqueeze(0), size=mel_shape, mode='linear').squeeze(0)
+        motion = F.interpolate(motion.T.unsqueeze(0), size=mel_shape, mode='linear', align_corners=True).squeeze(0)
         motion = torch.cat([motion, torch.randn(3, mel_shape)], dim=0)
         return motion
 
