@@ -7,23 +7,22 @@
 # MIT License for more details.
 
 import numpy as np
-from tqdm import tqdm
-
 import torch
 from torch.utils.data import DataLoader
 from torch.utils.tensorboard import SummaryWriter
+from tqdm import tqdm
 
 import params
+from data import TextMelBatchCollate, TextMelDataset
 from model import GradTTS
-from data import TextMelDataset, TextMelBatchCollate
-from utils import plot_tensor, save_plot
 from text.symbols import symbols
-
+from utils import plot_tensor, save_plot
 
 train_filelist_path = params.train_filelist_path
 valid_filelist_path = params.valid_filelist_path
 cmudict_path = params.cmudict_path
 add_blank = params.add_blank
+motion_folder = params.motion_folder
 
 log_dir = params.log_dir
 n_epochs = params.n_epochs
@@ -64,14 +63,14 @@ if __name__ == "__main__":
     logger = SummaryWriter(log_dir=log_dir)
 
     print('Initializing data loaders...')
-    train_dataset = TextMelDataset(train_filelist_path, cmudict_path, add_blank,
+    train_dataset = TextMelDataset(train_filelist_path, cmudict_path, motion_folder, add_blank,
                                    n_fft, n_feats, sample_rate, hop_length,
                                    win_length, f_min, f_max)
     batch_collate = TextMelBatchCollate()
     loader = DataLoader(dataset=train_dataset, batch_size=batch_size,
                         collate_fn=batch_collate, drop_last=True,
                         num_workers=4, shuffle=False)
-    test_dataset = TextMelDataset(valid_filelist_path, cmudict_path, add_blank,
+    test_dataset = TextMelDataset(valid_filelist_path, cmudict_path, motion_folder, add_blank,
                                   n_fft, n_feats, sample_rate, hop_length,
                                   win_length, f_min, f_max)
 

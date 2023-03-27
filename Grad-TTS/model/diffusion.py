@@ -7,6 +7,7 @@
 # MIT License for more details.
 
 import math
+
 import torch
 from einops import rearrange
 
@@ -195,7 +196,6 @@ class GradLogPEstimator2d(BaseModule):
             hiddens.append(x)
             x = downsample(x * mask_down)
             masks.append(mask_down[:, :, :, ::2])
-
         masks = masks[:-1]
         mask_mid = masks[-1]
         x = self.mid_block1(x, mask_mid, t)
@@ -280,9 +280,9 @@ class Diffusion(BaseModule):
 
     def loss_t(self, x0, mask, mu, t, spk=None):
         xt, z = self.forward_diffusion(x0, mask, mu, t)
-        time = t.unsqueeze(-1).unsqueeze(-1)
+        time = t.unsqueeze(-1).unsqueeze(-1) # t =[0.6215, 0.0191, 0.0391]
         cum_noise = get_noise(time, self.beta_min, self.beta_max, cumulative=True)
-        noise_estimation = self.estimator(xt, mask, mu, t, spk)
+        noise_estimation = self.estimator(xt, mask, mu, t, spk) # xt = [3, 80, 172], mask=[3, 1, 172], mu=[3, 80, 172], t=[3]
         noise_estimation *= torch.sqrt(1.0 - torch.exp(-cum_noise))
         loss = torch.sum((noise_estimation + z)**2) / (torch.sum(mask)*self.n_feats)
         return loss, xt

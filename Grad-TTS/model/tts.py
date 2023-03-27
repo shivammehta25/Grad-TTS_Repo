@@ -13,9 +13,10 @@ import torch
 
 from model import monotonic_align
 from model.base import BaseModule
-from model.text_encoder import TextEncoder
 from model.diffusion import Diffusion
-from model.utils import sequence_mask, generate_path, duration_loss, fix_len_compatibility
+from model.text_encoder import TextEncoder
+from model.utils import (duration_loss, fix_len_compatibility, generate_path,
+                         sequence_mask)
 
 
 class GradTTS(BaseModule):
@@ -144,13 +145,12 @@ class GradTTS(BaseModule):
 
         # Cut a small segment of mel-spectrogram in order to increase batch size
         if not isinstance(out_size, type(None)):
-            max_offset = (y_lengths - out_size).clamp(0)
-            offset_ranges = list(zip([0] * max_offset.shape[0], max_offset.cpu().numpy()))
+            max_offset = (y_lengths - out_size).clamp(0)    # cut a random segment of size `out_size` from each sample in batch max_offset: [758, 160, 773]
+            offset_ranges = list(zip([0] * max_offset.shape[0], max_offset.cpu().numpy()))  # offset ranges for each sample in batch offset_ranges: [(0, 758), (0, 160), (0, 773)]
             out_offset = torch.LongTensor([
                 torch.tensor(random.choice(range(start, end)) if end > start else 0)
                 for start, end in offset_ranges
             ]).to(y_lengths)
-            
             attn_cut = torch.zeros(attn.shape[0], attn.shape[1], out_size, dtype=attn.dtype, device=attn.device)
             y_cut = torch.zeros(y.shape[0], self.n_feats, out_size, dtype=y.dtype, device=y.device)
             y_cut_lengths = []

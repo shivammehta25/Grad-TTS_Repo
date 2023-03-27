@@ -7,27 +7,31 @@
 # MIT License for more details.
 
 import random
-import numpy as np
+import sys
+from pathlib import Path
 
+import numpy as np
+import pandas as pd
 import torch
+import torch.nn.functional as F
 import torchaudio as ta
 
-from text import text_to_sequence, cmudict
-from text.symbols import symbols
-from utils import parse_filelist, intersperse
 from model.utils import fix_len_compatibility
 from params import seed as random_seed
+from text import cmudict, text_to_sequence
+from text.symbols import symbols
+from utils import intersperse, parse_filelist
 
-import sys
 sys.path.insert(0, 'hifi-gan')
 from meldataset import mel_spectrogram
 
 
 class TextMelDataset(torch.utils.data.Dataset):
-    def __init__(self, filelist_path, cmudict_path, add_blank=True,
+    def __init__(self, filelist_path, cmudict_path, motion_folder, add_blank=True,
                  n_fft=1024, n_mels=80, sample_rate=22050,
                  hop_length=256, win_length=1024, f_min=0., f_max=8000):
         self.filepaths_and_text = parse_filelist(filelist_path)
+        self.motion_fileloc = Path(motion_folder)        
         self.cmudict = cmudict.CMUDict(cmudict_path)
         self.add_blank = add_blank
         self.n_fft = n_fft
@@ -44,12 +48,21 @@ class TextMelDataset(torch.utils.data.Dataset):
         filepath, text = filepath_and_text[0], filepath_and_text[1]
         text = self.get_text(text, add_blank=self.add_blank)
         mel = self.get_mel(filepath)
+        motion = self.get_motion(filepath, mel.shape[1])
+        mel = torch.cat((mel, motion), dim=0)
         return (text, mel)
+    
+    def get_motion(self, filename, mel_shape, ext=".expmap_86.1328125fps.pkl"):
+        file_loc = self.motion_fileloc / Path(Path(filename).name).with_suffix(ext)
+        motion = torch.from_numpy(pd.read_pickle(file_loc).to_numpy())[::4]
+        motion = F.interpolate(motion.T.unsqueeze(0), size=mel_shape, mode='linear').squeeze(0)
+        motion = torch.cat([motion, torch.randn(3, mel_shape)], dim=0)
+        return motion
 
     def get_mel(self, filepath):
         audio, sr = ta.load(filepath)
         assert sr == self.sample_rate
-        mel = mel_spectrogram(audio, self.n_fft, self.n_mels, self.sample_rate, self.hop_length,
+        mel = mel_spectrogram(audio, self.n_fft, 80, self.sample_rate, self.hop_length,
                               self.win_length, self.f_min, self.f_max, center=False).squeeze()
         return mel
 
