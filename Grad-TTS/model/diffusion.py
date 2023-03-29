@@ -12,6 +12,7 @@ import torch
 from einops import rearrange
 
 from model.base import BaseModule
+from model.wavegrad import WaveGrad
 
 
 class Mish(BaseModule):
@@ -285,6 +286,73 @@ class Diffusion(BaseModule):
         noise_estimation = self.estimator(xt, mask, mu, t, spk) # xt = [3, 80, 172], mask=[3, 1, 172], mu=[3, 80, 172], t=[3]
         noise_estimation *= torch.sqrt(1.0 - torch.exp(-cum_noise))
         loss = torch.sum((noise_estimation + z)**2) / (torch.sum(mask)*self.n_feats)
+        return loss, xt
+
+    def compute_loss(self, x0, mask, mu, spk=None, offset=1e-5):
+        t = torch.rand(x0.shape[0], dtype=x0.dtype, device=x0.device,
+                       requires_grad=False)
+        t = torch.clamp(t, offset, 1.0 - offset)
+        return self.loss_t(x0, mask, mu, t, spk)
+
+
+
+class Diffusion_Motion(BaseModule):
+    def __init__(self, in_channels, conditioning_channels,beta_min=0.05, beta_max=20):
+        super(Diffusion_Motion, self).__init__()
+        self.in_channels = in_channels
+        self.conditioning_channels = conditioning_channels
+        self.beta_min = beta_min
+        self.beta_max = beta_max
+        
+        self.estimator = WaveGrad(
+            in_channels=in_channels,
+            conditioning_channels=conditioning_channels
+        )
+
+    def forward_diffusion(self, x0, mask, mu, t):
+        time = t.unsqueeze(-1).unsqueeze(-1)
+        cum_noise = get_noise(time, self.beta_min, self.beta_max, cumulative=True)
+        mean = x0*torch.exp(-0.5*cum_noise) + mu*(1.0 - torch.exp(-0.5*cum_noise))
+        variance = 1.0 - torch.exp(-cum_noise)
+        z = torch.randn(x0.shape, dtype=x0.dtype, device=x0.device, 
+                        requires_grad=False)
+        xt = mean + z * torch.sqrt(variance)
+        return xt * mask, z * mask
+
+    @torch.no_grad()
+    def reverse_diffusion(self, z, mask, mu, n_timesteps, stoc=False, spk=None):
+        h = 1.0 / n_timesteps
+        xt = z * mask
+        for i in range(n_timesteps):
+            t = (1.0 - (i + 0.5)*h) * torch.ones(z.shape[0], dtype=z.dtype, 
+                                                 device=z.device)
+            time = t.unsqueeze(-1).unsqueeze(-1)
+            noise_t = get_noise(time, self.beta_min, self.beta_max, 
+                                cumulative=False)
+            if stoc:  # adds stochastic term
+                dxt_det = 0.5 * (mu - xt) - self.estimator(xt, mask, mu, t, spk)
+                dxt_det = dxt_det * noise_t * h
+                dxt_stoc = torch.randn(z.shape, dtype=z.dtype, device=z.device,
+                                       requires_grad=False)
+                dxt_stoc = dxt_stoc * torch.sqrt(noise_t * h)
+                dxt = dxt_det + dxt_stoc
+            else:
+                dxt = 0.5 * (mu - xt - self.estimator(xt, mask, mu, t, spk))
+                dxt = dxt * noise_t * h
+            xt = (xt - dxt) * mask
+        return xt
+
+    @torch.no_grad()
+    def forward(self, z, mask, mu, n_timesteps, stoc=False, spk=None):
+        return self.reverse_diffusion(z, mask, mu, n_timesteps, stoc, spk)
+
+    def loss_t(self, x0, mask, mu, t, spk=None):
+        xt, z = self.forward_diffusion(x0, mask, mu, t)
+        time = t.unsqueeze(-1).unsqueeze(-1) # t =[0.6215, 0.0191, 0.0391]
+        cum_noise = get_noise(time, self.beta_min, self.beta_max, cumulative=True)
+        noise_estimation = self.estimator(xt, mask, mu, t, spk) # xt = [3, 80, 172], mask=[3, 1, 172], mu=[3, 80, 172], t=[3]
+        noise_estimation *= torch.sqrt(1.0 - torch.exp(-cum_noise))
+        loss = torch.sum((noise_estimation + z)**2) / (torch.sum(mask)*self.in_channels)
         return loss, xt
 
     def compute_loss(self, x0, mask, mu, spk=None, offset=1e-5):

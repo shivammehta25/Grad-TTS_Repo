@@ -49,15 +49,12 @@ class TextMelDataset(torch.utils.data.Dataset):
         text = self.get_text(text, add_blank=self.add_blank)
         mel = self.get_mel(filepath)
         motion = self.get_motion(filepath, mel.shape[1])
-        mel = torch.cat((mel, motion), dim=0)
-        return (text, mel)
+        return (text, mel, motion)
     
-    def get_motion(self, filename, mel_shape, ext=".expmap_86.1328125fps.pkl"):
+    def get_motion(self, filename, mel_shape, ext=".expmap_20fps.pkl"):
         file_loc = self.motion_fileloc / Path(Path(filename).name).with_suffix(ext)
-        motion = torch.from_numpy(pd.read_pickle(file_loc).to_numpy())[::4]
-        motion = F.interpolate(motion.T.unsqueeze(0), size=mel_shape, mode='linear', align_corners=True).squeeze(0)
-        motion = torch.cat([motion, torch.randn(3, mel_shape)], dim=0)
-        return motion
+        motion = torch.from_numpy(pd.read_pickle(file_loc).to_numpy())
+        return motion.T
 
     def get_mel(self, filepath):
         audio, sr = ta.load(filepath)
@@ -74,8 +71,8 @@ class TextMelDataset(torch.utils.data.Dataset):
         return text_norm
 
     def __getitem__(self, index):
-        text, mel = self.get_pair(self.filepaths_and_text[index])
-        item = {'y': mel, 'x': text}
+        text, mel, motion = self.get_pair(self.filepaths_and_text[index])
+        item = {'y': mel, 'x': text, 'y_motion': motion}
         return item
 
     def __len__(self):
