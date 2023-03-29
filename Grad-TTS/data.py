@@ -51,10 +51,10 @@ class TextMelDataset(torch.utils.data.Dataset):
         motion = self.get_motion(filepath, mel.shape[1])
         return (text, mel, motion)
     
-    def get_motion(self, filename, mel_shape, ext=".expmap_20fps.pkl"):
+    def get_motion(self, filename, mel_shape, ext=".expmap_86.1328125fps.pkl"):
         file_loc = self.motion_fileloc / Path(Path(filename).name).with_suffix(ext)
         motion = torch.from_numpy(pd.read_pickle(file_loc).to_numpy())
-        return motion.T
+        return F.interpolate(motion.T.unsqueeze(0), mel_shape).squeeze(0)
 
     def get_mel(self, filepath):
         audio, sr = ta.load(filepath)
@@ -93,21 +93,24 @@ class TextMelBatchCollate(object):
         y_max_length = fix_len_compatibility(y_max_length)
         x_max_length = max([item['x'].shape[-1] for item in batch])
         n_feats = batch[0]['y'].shape[-2]
+        n_motion = batch[0]['y_motion'].shape[-2]
 
         y = torch.zeros((B, n_feats, y_max_length), dtype=torch.float32)
         x = torch.zeros((B, x_max_length), dtype=torch.long)
+        y_motion = torch.zeros((B, n_motion, y_max_length), dtype=torch.float32)
         y_lengths, x_lengths = [], []
 
         for i, item in enumerate(batch):
-            y_, x_ = item['y'], item['x']
+            y_, x_, y_motion_ = item['y'], item['x'], item['y_motion']
             y_lengths.append(y_.shape[-1])
             x_lengths.append(x_.shape[-1])
             y[i, :, :y_.shape[-1]] = y_
             x[i, :x_.shape[-1]] = x_
+            y_motion[i, :, :y_motion_.shape[-1]] = y_motion_
 
         y_lengths = torch.LongTensor(y_lengths)
         x_lengths = torch.LongTensor(x_lengths)
-        return {'x': x, 'x_lengths': x_lengths, 'y': y, 'y_lengths': y_lengths}
+        return {'x': x, 'x_lengths': x_lengths, 'y': y, 'y_lengths': y_lengths, 'y_motion': y_motion}
 
 
 class TextMelSpeakerDataset(torch.utils.data.Dataset):

@@ -13,12 +13,12 @@ train_filelist_path = 'data/filelists/cormac_train.txt'
 valid_filelist_path = 'data/filelists/cormac_val.txt'
 test_filelist_path = 'resources/filelists/ljspeech/test.txt'
 cmudict_path = 'resources/cmu_dictionary'
-motion_folder = 'data/cormac/processed_sm0_0_20fps'
+motion_folder = 'data/cormac/processed_sm0_0_86fps'
 add_blank = True
 n_spks = 1  # 247 for Libri-TTS filelist and 1 for LJSpeech
 spk_emb_dim = 64
 n_feats = 80 
-n_motion = 45
+n_motions = 45
 n_fft = 1024
 sample_rate = 22050
 hop_length = 256
@@ -37,17 +37,30 @@ n_heads = 2
 window_size = 4
 
 # decoder parameters
-dec_dim = 64
+dec_dim = 128 
 beta_min = 0.05
 beta_max = 20.0
 pe_scale = 1000  # 1 for `grad-tts-old.pt` checkpoint
 
 # training parameters
-log_dir = 'logs/test'
+log_dir = 'logs/test1'
 test_size = 4
 n_epochs = 10000
-batch_size = 32 
+batch_size = 24 
 learning_rate = 1e-4
 seed = 37
 save_every = 1
 out_size = fix_len_compatibility(2*22050//256)
+
+mu_motion_encoder_params = {
+                "hidden_channels": 384,
+                "d_head": 64,
+                "n_layer": 4,
+                "n_head": 1,
+                "ff_mult": 4,
+                "conv_expansion_factor": 2,
+                "dropout": 0.1,
+                "dropconv": 0.1,
+                "dropatt": 0.1,
+                "conv_kernel_size": 21,
+}

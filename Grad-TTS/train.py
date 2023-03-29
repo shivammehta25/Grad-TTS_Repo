@@ -42,7 +42,7 @@ n_heads = params.n_heads
 window_size = params.window_size
 
 n_feats = params.n_feats
-n_motion = params.n_motion
+n_motions = params.n_motions
 n_fft = params.n_fft
 sample_rate = params.sample_rate
 hop_length = params.hop_length
@@ -54,6 +54,8 @@ dec_dim = params.dec_dim
 beta_min = params.beta_min
 beta_max = params.beta_max
 pe_scale = params.pe_scale
+
+mu_motion_encoder_params = params.mu_motion_encoder_params
 
 
 if __name__ == "__main__":
@@ -78,7 +80,7 @@ if __name__ == "__main__":
     print('Initializing model...')
     model = GradTTS(nsymbols, 1, None, n_enc_channels, filter_channels, filter_channels_dp, 
                     n_heads, n_enc_layers, enc_kernel, enc_dropout, window_size, 
-                    n_feats, dec_dim, beta_min, beta_max, pe_scale, n_motion).cuda()
+                    n_feats, n_motions, dec_dim, beta_min, beta_max, pe_scale, mu_motion_encoder_params).cuda()
     print('Number of encoder + duration predictor parameters: %.2fm' % (model.encoder.nparams/1e6))
     print('Number of decoder parameters: %.2fm' % (model.decoder.nparams/1e6))
     print('Total parameters: %.2fm' % (model.nparams/1e6))
@@ -90,9 +92,14 @@ if __name__ == "__main__":
     test_batch = test_dataset.sample_test_batch(size=params.test_size)
     for i, item in enumerate(test_batch):
         mel = item['y']
+        motion = item['y_motion']
         logger.add_image(f'image_{i}/ground_truth', plot_tensor(mel.squeeze()),
                          global_step=0, dataformats='HWC')
         save_plot(mel.squeeze(), f'{log_dir}/original_{i}.png')
+        
+        logger.add_image(f'image_{i}/ground_truth_motion', plot_tensor(motion.squeeze()),
+                         global_step=0, dataformats='HWC')
+        save_plot(motion.squeeze(), f'{log_dir}/original_motion_{i}.png')
 
     print('Start training...')
     iteration = 0
@@ -106,8 +113,10 @@ if __name__ == "__main__":
                 model.zero_grad()
                 x, x_lengths = batch['x'].cuda(), batch['x_lengths'].cuda()
                 y, y_lengths = batch['y'].cuda(), batch['y_lengths'].cuda()
+                y_motion = batch['y_motion'].cuda()
                 dur_loss, prior_loss, diff_loss = model.compute_loss(x, x_lengths,
                                                                      y, y_lengths,
+                                                                     y_motion, 
                                                                      out_size=out_size)
                 loss = sum([dur_loss, prior_loss, diff_loss])
                 loss.backward()
@@ -154,12 +163,18 @@ if __name__ == "__main__":
             for i, item in enumerate(test_batch):
                 x = item['x'].to(torch.long).unsqueeze(0).cuda()
                 x_lengths = torch.LongTensor([x.shape[-1]]).cuda()
-                y_enc, y_dec, attn = model(x, x_lengths, n_timesteps=50)
+                y_enc, y_dec, y_motion_enc, y_motion_dec, attn = model(x, x_lengths, n_timesteps=50)
                 logger.add_image(f'image_{i}/generated_enc',
                                  plot_tensor(y_enc.squeeze().cpu()),
                                  global_step=iteration, dataformats='HWC')
                 logger.add_image(f'image_{i}/generated_dec',
                                  plot_tensor(y_dec.squeeze().cpu()),
+                                 global_step=iteration, dataformats='HWC')
+                logger.add_image(f'image_{i}/generated_enc',
+                                 plot_tensor(y_motion_enc.squeeze().cpu()),
+                                 global_step=iteration, dataformats='HWC')
+                logger.add_image(f'image_{i}/generated_dec',
+                                 plot_tensor(y_motion_dec.squeeze().cpu()),
                                  global_step=iteration, dataformats='HWC')
                 logger.add_image(f'image_{i}/alignment',
                                  plot_tensor(attn.squeeze().cpu()),
@@ -168,6 +183,10 @@ if __name__ == "__main__":
                           f'{log_dir}/generated_enc_{i}.png')
                 save_plot(y_dec.squeeze().cpu(), 
                           f'{log_dir}/generated_dec_{i}.png')
+                save_plot(y_motion_enc.squeeze().cpu(), 
+                          f'{log_dir}/generated_enc_motion_{i}.png')
+                save_plot(y_motion_dec.squeeze().cpu(), 
+                          f'{log_dir}/generated_dec_motion_{i}.png')
                 save_plot(attn.squeeze().cpu(), 
                           f'{log_dir}/alignment_{i}.png')
 

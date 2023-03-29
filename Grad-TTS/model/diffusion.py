@@ -297,16 +297,14 @@ class Diffusion(BaseModule):
 
 
 class Diffusion_Motion(BaseModule):
-    def __init__(self, in_channels, conditioning_channels,beta_min=0.05, beta_max=20):
+    def __init__(self, in_channels, beta_min=0.05, beta_max=20):
         super(Diffusion_Motion, self).__init__()
         self.in_channels = in_channels
-        self.conditioning_channels = conditioning_channels
         self.beta_min = beta_min
         self.beta_max = beta_max
         
         self.estimator = WaveGrad(
-            in_channels=in_channels,
-            conditioning_channels=conditioning_channels
+            in_channels=in_channels
         )
 
     def forward_diffusion(self, x0, mask, mu, t):

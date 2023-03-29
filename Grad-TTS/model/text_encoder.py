@@ -3,9 +3,12 @@
 import math
 
 import torch
+import torch.nn as nn
+from conformer import ConformerBlock
+from einops import rearrange
 
 from model.base import BaseModule
-from model.utils import sequence_mask, convert_pad_shape
+from model.utils import convert_pad_shape, sequence_mask
 
 
 class LayerNorm(BaseModule):
@@ -324,3 +327,56 @@ class TextEncoder(BaseModule):
         logw = self.proj_w(x_dp, x_mask)
 
         return mu, logw, x_mask
+
+
+
+
+
+
+
+class MuMotionEncoder(nn.Module):
+    def __init__(
+        self,
+        input_channels,
+        output_channels,
+        hidden_channels,
+        d_head,
+        n_layer,
+        n_head,
+        ff_mult,
+        conv_expansion_factor,
+        dropout,
+        dropatt,
+        dropconv,
+        conv_kernel_size,
+    ) -> None:
+        super().__init__()
+
+        self.in_projection = nn.Conv1d(input_channels, hidden_channels, 1)
+        self.layers = nn.ModuleList()
+        for _ in range(n_layer):
+            self.layers.append(
+                ConformerBlock(
+                    dim=hidden_channels,
+                    dim_head=d_head,
+                    heads=n_head,
+                    ff_mult=ff_mult,
+                    conv_expansion_factor=conv_expansion_factor,
+                    ff_dropout=dropout,
+                    attn_dropout=dropatt,
+                    conv_dropout=dropconv,
+                    conv_kernel_size=conv_kernel_size,
+                )
+            )
+            
+        self.motion_projection = nn.Conv1d(hidden_channels, output_channels, 1)
+
+    def forward(self, x, mask):
+        x = self.in_projection(x)
+        x = rearrange(x, "b c t -> b t c")
+        mask = rearrange(mask, "b 1 t -> b (1 t)").bool()
+        for layer in self.layers:
+            x = layer(x, mask)
+        x = rearrange(x, "b t c -> b c t") 
+        x = self.motion_projection(x)
+        return x 

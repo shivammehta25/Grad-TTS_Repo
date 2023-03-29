@@ -14,7 +14,7 @@ import torch
 from model import monotonic_align
 from model.base import BaseModule
 from model.diffusion import Diffusion, Diffusion_Motion
-from model.text_encoder import TextEncoder
+from model.text_encoder import MuMotionEncoder, TextEncoder
 from model.utils import (duration_loss, fix_len_compatibility, generate_path,
                          sequence_mask)
 
@@ -22,7 +22,7 @@ from model.utils import (duration_loss, fix_len_compatibility, generate_path,
 class GradTTS(BaseModule):
     def __init__(self, n_vocab, n_spks, spk_emb_dim, n_enc_channels, filter_channels, filter_channels_dp, 
                  n_heads, n_enc_layers, enc_kernel, enc_dropout, window_size, 
-                 n_feats, dec_dim, beta_min, beta_max, pe_scale, n_motion):
+                 n_feats, n_motions, dec_dim, beta_min, beta_max, pe_scale, mu_motion_encoder_params):
         super(GradTTS, self).__init__()
         self.n_vocab = n_vocab
         self.n_spks = n_spks
@@ -36,6 +36,7 @@ class GradTTS(BaseModule):
         self.enc_dropout = enc_dropout
         self.window_size = window_size
         self.n_feats = n_feats
+        self.n_motions = n_motions
         self.dec_dim = dec_dim
         self.beta_min = beta_min
         self.beta_max = beta_max
@@ -47,9 +48,15 @@ class GradTTS(BaseModule):
                                    filter_channels, filter_channels_dp, n_heads, 
                                    n_enc_layers, enc_kernel, enc_dropout, window_size)
         self.decoder = Diffusion(n_feats, dec_dim, n_spks, spk_emb_dim, beta_min, beta_max, pe_scale)
+        
+        self.mu_motion_encoder = MuMotionEncoder(
+            input_channels=n_feats,
+            output_channels=n_motions,
+            **mu_motion_encoder_params
+        )
+        
         self.decoder_motion = Diffusion_Motion(
-            in_channels=n_motion,
-            conditioning_channels=n_feats,
+            in_channels=n_motions,
             beta_min=beta_min,
             beta_max=beta_max,
         )
@@ -97,15 +104,22 @@ class GradTTS(BaseModule):
         mu_y = mu_y.transpose(1, 2)
         encoder_outputs = mu_y[:, :, :y_max_length]
 
+        mu_y_motion = self.mu_motion_encoder(mu_y, y_mask)
+        encoder_outputs_motion = mu_y_motion[:, :, :y_max_length]
+
         # Sample latent representation from terminal distribution N(mu_y, I)
         z = mu_y + torch.randn_like(mu_y, device=mu_y.device) / temperature
         # Generate sample by performing reverse dynamics
         decoder_outputs = self.decoder(z, y_mask, mu_y, n_timesteps, stoc, spk)
         decoder_outputs = decoder_outputs[:, :, :y_max_length]
+        
+        z_motion = mu_y_motion + torch.randn_like(mu_y_motion, device=mu_y_motion.device) / temperature 
+        decoder_outputs_motion = self.decoder_motion(z_motion, y_mask, mu_y_motion, n_timesteps, stoc, spk)
+        decoder_outputs_motion = decoder_outputs_motion[:, :, :y_max_length]
 
-        return encoder_outputs, decoder_outputs, attn[:, :, :y_max_length]
+        return encoder_outputs, decoder_outputs, encoder_outputs_motion,  decoder_outputs_motion, attn[:, :, :y_max_length]
 
-    def compute_loss(self, x, x_lengths, y, y_lengths, spk=None, out_size=None):
+    def compute_loss(self, x, x_lengths, y, y_lengths, y_motion, spk=None, out_size=None):
         """
         Computes 3 losses:
             1. duration loss: loss between predicted token durations and those extracted by Monotinic Alignment Search (MAS).
@@ -159,29 +173,40 @@ class GradTTS(BaseModule):
             ]).to(y_lengths)
             attn_cut = torch.zeros(attn.shape[0], attn.shape[1], out_size, dtype=attn.dtype, device=attn.device)
             y_cut = torch.zeros(y.shape[0], self.n_feats, out_size, dtype=y.dtype, device=y.device)
+            y_motion_cut = torch.zeros(y_motion.shape[0], self.n_motions, out_size, dtype=y_motion.dtype, device=y_motion.device)
             y_cut_lengths = []
             for i, (y_, out_offset_) in enumerate(zip(y, out_offset)):
                 y_cut_length = out_size + (y_lengths[i] - out_size).clamp(None, 0)
                 y_cut_lengths.append(y_cut_length)
                 cut_lower, cut_upper = out_offset_, out_offset_ + y_cut_length
                 y_cut[i, :, :y_cut_length] = y_[:, cut_lower:cut_upper]
+                y_motion_cut[i, :, :y_cut_length] = y_motion[i, :, cut_lower:cut_upper]
                 attn_cut[i, :, :y_cut_length] = attn[i, :, cut_lower:cut_upper]
             y_cut_lengths = torch.LongTensor(y_cut_lengths)
             y_cut_mask = sequence_mask(y_cut_lengths).unsqueeze(1).to(y_mask)
             
             attn = attn_cut
             y = y_cut
+            y_motion = y_motion_cut
             y_mask = y_cut_mask
 
         # Align encoded text with mel-spectrogram and get mu_y segment
         mu_y = torch.matmul(attn.squeeze(1).transpose(1, 2), mu_x.transpose(1, 2))
         mu_y = mu_y.transpose(1, 2)
+        
+        mu_y_motion = self.mu_motion_encoder(mu_y, y_mask)
 
         # Compute loss of score-based decoder
         diff_loss, xt = self.decoder.compute_loss(y, y_mask, mu_y, spk)
+        diff_loss_motion, xt_motion = self.decoder_motion.compute_loss(y_motion, y_mask, mu_y_motion, spk)
         
         # Compute loss between aligned encoder outputs and mel-spectrogram
         prior_loss = torch.sum(0.5 * ((y - mu_y) ** 2 + math.log(2 * math.pi)) * y_mask)
         prior_loss = prior_loss / (torch.sum(y_mask) * self.n_feats)
         
-        return dur_loss, prior_loss, diff_loss
+        
+         
+        prior_loss_motion = torch.sum(0.5 * ((y_motion - mu_y_motion) ** 2 + math.log(2 * math.pi)) * y_mask)
+        prior_loss_motion = prior_loss_motion / (torch.sum(y_mask) * self.n_motions)
+        
+        return dur_loss, prior_loss + prior_loss_motion, diff_loss + diff_loss_motion

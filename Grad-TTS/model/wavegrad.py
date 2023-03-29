@@ -149,14 +149,14 @@ class DBlock(nn.Module):
 
 
 class WaveGrad(nn.Module):
-  def __init__(self, in_channels, conditioning_channels):
+  def __init__(self, in_channels):
     super().__init__()
     self.downsample = nn.ModuleList([
-        Conv1d(conditioning_channels, 32, 5, padding=2),
-        DBlock(32, 128, 2),
-        DBlock(128, 128, 2),
-        DBlock(128, 256, 3),
-        DBlock(256, 512, 5),
+        Conv1d(in_channels, 32, 5, padding=2),
+        DBlock(32, 128, 1),
+        DBlock(128, 128, 1),
+        DBlock(128, 256, 1),
+        DBlock(256, 512, 1),
     ])
     self.film = nn.ModuleList([
         FiLM(32, 128),
@@ -172,10 +172,10 @@ class WaveGrad(nn.Module):
         UBlock(256, 128, 1, [1, 2, 4, 8]),
         UBlock(128, 128, 1, [1, 2, 4, 8]),
     ])
-    self.first_conv = Conv1d(conditioning_channels, 768, 3, padding=1)
+    self.first_conv = Conv1d(in_channels, 768, 3, padding=1)
     self.last_conv = Conv1d(128, in_channels, 3, padding=1)
 
-  def forward(self, x, mask, conditioning, noise_scale):
+  def forward(self, x, mask, conditioning, noise_scale, spk=None): # Currently does not supports multispeaker
     downsampled = []
     for film, layer in zip(self.film, self.downsample):
       x = layer(x)
