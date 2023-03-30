@@ -170,3 +170,10 @@ def compare_parameters(new, old):
 
 def module_to_namespace(module):
     return Namespace(**{k: getattr(module, k) for k in get_dir_without_underscore(module) if not k.startswith('_')})
+
+
+def normalize(data, mu, std):
+    return (data - mu) / std
+
+def denormalize(data, mu, std):
+    return data * std + mu

@@ -22,7 +22,8 @@ from model.utils import (duration_loss, fix_len_compatibility, generate_path,
 class GradTTS(BaseModule):
     def __init__(self, n_vocab, n_spks, spk_emb_dim, n_enc_channels, filter_channels, filter_channels_dp, 
                  n_heads, n_enc_layers, enc_kernel, enc_dropout, window_size, 
-                 n_feats, n_motions, dec_dim, beta_min, beta_max, pe_scale, mu_motion_encoder_params, decoder_motion_type, only_speech=False):
+                 n_feats, n_motions, dec_dim, beta_min, beta_max, pe_scale, 
+                 mu_motion_encoder_params, decoder_motion_type, motion_reduction_factor, only_speech=False):
         super(GradTTS, self).__init__()
         self.n_vocab = n_vocab
         self.n_spks = n_spks
@@ -42,6 +43,7 @@ class GradTTS(BaseModule):
         self.beta_max = beta_max
         self.pe_scale = pe_scale
         self.generate_motion = not only_speech
+        self.motion_reduction_factor = motion_reduction_factor
 
         if n_spks > 1:
             self.spk_emb = torch.nn.Embedding(n_spks, spk_emb_dim)
@@ -115,25 +117,27 @@ class GradTTS(BaseModule):
         mu_y = torch.matmul(attn.squeeze(1).transpose(1, 2), mu_x.transpose(1, 2))
         mu_y = mu_y.transpose(1, 2)
         encoder_outputs = mu_y[:, :, :y_max_length]
-
-        if self.generate_motion:
-            mu_y_motion = self.mu_motion_encoder(mu_y, y_mask)
-            encoder_outputs_motion = mu_y_motion[:, :, :y_max_length]
-        else:
-            encoder_outputs_motion = None
-
+        
+        
         # Sample latent representation from terminal distribution N(mu_y, I)
         z = mu_y + torch.randn_like(mu_y, device=mu_y.device) / temperature
         # Generate sample by performing reverse dynamics
         decoder_outputs = self.decoder(z, y_mask, mu_y, n_timesteps, stoc, spk)
         decoder_outputs = decoder_outputs[:, :, :y_max_length]
-        
+
         if self.generate_motion:
+            mu_y_motion = mu_y[:, :, ::self.motion_reduction_factor] 
+            y_motion_mask = y_mask[:, :, ::self.motion_reduction_factor]
+            mu_y_motion = self.mu_motion_encoder(mu_y_motion, y_motion_mask)
+            encoder_outputs_motion = mu_y_motion[:, :, :y_max_length]
+            # sample latent representation from terminal distribution N(mu_y_motion, I)
             z_motion = mu_y_motion + torch.randn_like(mu_y_motion, device=mu_y_motion.device) / temperature 
-            decoder_outputs_motion = self.decoder_motion(z_motion, y_mask, mu_y_motion, n_timesteps, stoc, spk)
+            # Generate sample by performing reverse dynamics
+            decoder_outputs_motion = self.decoder_motion(z_motion, y_motion_mask, mu_y_motion, n_timesteps, stoc, spk)
             decoder_outputs_motion = decoder_outputs_motion[:, :, :y_max_length]
         else:
             decoder_outputs_motion = None
+            encoder_outputs_motion = None
 
         return encoder_outputs, decoder_outputs, encoder_outputs_motion,  decoder_outputs_motion, attn[:, :, :y_max_length]
 
@@ -224,8 +228,13 @@ class GradTTS(BaseModule):
         # Compute loss of score-based decoder
         diff_loss, xt = self.decoder.compute_loss(y, y_mask, mu_y, spk)
         if self.generate_motion:
-            mu_y_motion = self.mu_motion_encoder(mu_y, y_mask)
-            diff_loss_motion, xt_motion = self.decoder_motion.compute_loss(y_motion, y_mask, mu_y_motion, spk)
+            # Reduce motion features
+            mu_y_motion = mu_y[:, :, ::self.motion_reduction_factor]
+            y_motion_mask = y_mask[:, :, ::self.motion_reduction_factor]
+            y_motion = y_motion[:, :, ::self.motion_reduction_factor]
+            
+            mu_y_motion = self.mu_motion_encoder(mu_y_motion, y_motion_mask)
+            diff_loss_motion, xt_motion = self.decoder_motion.compute_loss(y_motion, y_motion_mask, mu_y_motion, spk)
         else:
             diff_loss_motion = 0
         
@@ -234,8 +243,8 @@ class GradTTS(BaseModule):
         prior_loss = prior_loss / (torch.sum(y_mask) * self.n_feats)
         
         if self.generate_motion:
-            prior_loss_motion = torch.sum(0.5 * ((y_motion - mu_y_motion) ** 2 + math.log(2 * math.pi)) * y_mask)
-            prior_loss_motion = prior_loss_motion / (torch.sum(y_mask) * self.n_motions)
+            prior_loss_motion = torch.sum(0.5 * ((y_motion - mu_y_motion) ** 2 + math.log(2 * math.pi)) * y_motion_mask)
+            prior_loss_motion = prior_loss_motion / (torch.sum(y_motion_mask) * self.n_motions)
         else:
             prior_loss_motion = 0
         

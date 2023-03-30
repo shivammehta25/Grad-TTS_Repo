@@ -6,6 +6,8 @@
 # MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
 # MIT License for more details.
 
+from torch import load
+
 from model.utils import fix_len_compatibility
 
 # data parameters
@@ -18,7 +20,7 @@ add_blank = True
 n_spks = 1  # 247 for Libri-TTS filelist and 1 for LJSpeech
 spk_emb_dim = 64
 n_feats = 80 
-n_motions = 48
+n_motions = 45
 n_fft = 1024
 sample_rate = 22050
 hop_length = 256
@@ -43,14 +45,14 @@ beta_max = 20.0
 pe_scale = 1000  # 1 for `grad-tts-old.pt` checkpoint
 
 # training parameters
-log_dir = 'logs/trainer'
+log_dir = 'logs/{}'
 test_size = 4
 n_epochs = 10000
 batch_size = 24 
 learning_rate = 1e-4
 seed = 37
 save_every = 1
-out_size = fix_len_compatibility(2*22050//256)
+out_size = fix_len_compatibility(2*22050//256) 
 
 mu_motion_encoder_params = {
                 "hidden_channels": 384,
@@ -64,4 +66,6 @@ mu_motion_encoder_params = {
                 "dropatt": 0.1,
                 "conv_kernel_size": 21,
 }
-decoder_motion_type = "gradtts" # [wavegrad, gradtts]
+decoder_motion_type = "wavegrad" # [wavegrad, gradtts]
+motion_reduction_factor = 1 
+data_parameters = load("data_parameters.pt")

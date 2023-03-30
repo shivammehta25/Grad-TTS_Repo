@@ -60,15 +60,20 @@ pe_scale = params.pe_scale
 
 mu_motion_encoder_params = params.mu_motion_encoder_params
 decoder_motion_type = params.decoder_motion_type
-
+motion_reduction_factor = params.motion_reduction_factor
+data_parameters = params.data_parameters
 
 if __name__ == "__main__":
     
     parser = argparse.ArgumentParser(description='Train GradTTS')
     parser.add_argument('--only-speech', '-s', action='store_true', help='Train without motion')
     parser.add_argument('--resume_from_checkpoint', '-c', type=str, default=None, help='Resume from checkpoint')
+    parser.add_argument('-run_name', '-r', type=str, required=True, help='Name of the run')
     args = parser.parse_args()      
-
+    
+    log_dir = log_dir.format(args.run_name)
+    print(f'Running : {args.run_name}')
+    
     if args.only_speech:
         print('Note*: Only speech flag is True. training only speech model')
     
@@ -81,19 +86,20 @@ if __name__ == "__main__":
     print('Initializing data loaders...')
     train_dataset = TextMelDataset(train_filelist_path, cmudict_path, motion_folder, add_blank,
                                    n_fft, n_feats, sample_rate, hop_length,
-                                   win_length, f_min, f_max)
+                                   win_length, f_min, f_max, data_parameters)
     batch_collate = TextMelBatchCollate()
     loader = DataLoader(dataset=train_dataset, batch_size=batch_size,
                         collate_fn=batch_collate, drop_last=True,
                         num_workers=4, shuffle=False)
     test_dataset = TextMelDataset(valid_filelist_path, cmudict_path, motion_folder, add_blank,
                                   n_fft, n_feats, sample_rate, hop_length,
-                                  win_length, f_min, f_max)
+                                  win_length, f_min, f_max, data_parameters)
 
     print('Initializing model...')
     model = GradTTS(nsymbols, 1, None, n_enc_channels, filter_channels, filter_channels_dp, 
                     n_heads, n_enc_layers, enc_kernel, enc_dropout, window_size, 
-                    n_feats, n_motions, dec_dim, beta_min, beta_max, pe_scale, mu_motion_encoder_params, decoder_motion_type, args.only_speech).cuda()
+                    n_feats, n_motions, dec_dim, beta_min, beta_max, pe_scale, 
+                    mu_motion_encoder_params, decoder_motion_type, motion_reduction_factor,args.only_speech).cuda()
     print('Number of encoder + duration predictor parameters: %.2fm' % (model.encoder.nparams/1e6))
     print('Number of decoder parameters: %.2fm' % (model.decoder.nparams/1e6))
     print('Total parameters: %.2fm' % (model.nparams/1e6))
