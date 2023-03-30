@@ -15,6 +15,7 @@ import pandas as pd
 import torch
 import torch.nn.functional as F
 import torchaudio as ta
+from einops import pack
 
 from model.utils import fix_len_compatibility
 from params import seed as random_seed
@@ -54,7 +55,11 @@ class TextMelDataset(torch.utils.data.Dataset):
     def get_motion(self, filename, mel_shape, ext=".expmap_86.1328125fps.pkl"):
         file_loc = self.motion_fileloc / Path(Path(filename).name).with_suffix(ext)
         motion = torch.from_numpy(pd.read_pickle(file_loc).to_numpy())
-        return F.interpolate(motion.T.unsqueeze(0), mel_shape).squeeze(0)
+        motion = F.interpolate(motion.T.unsqueeze(0), mel_shape).squeeze(0)
+        c, t = motion.shape
+        c_fixed = fix_len_compatibility(c)
+        motion = pack([torch.zeros(c_fixed - c, t), motion], '* t')[0]
+        return motion 
 
     def get_mel(self, filepath):
         audio, sr = ta.load(filepath)

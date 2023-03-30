@@ -18,7 +18,8 @@ import params
 from data import TextMelBatchCollate, TextMelDataset
 from model import GradTTS
 from text.symbols import symbols
-from utils import plot_tensor, save_plot
+from utils import (compare_parameters, module_to_namespace, plot_tensor,
+                   save_plot)
 
 train_filelist_path = params.train_filelist_path
 valid_filelist_path = params.valid_filelist_path
@@ -65,7 +66,9 @@ if __name__ == "__main__":
     
     parser = argparse.ArgumentParser(description='Train GradTTS')
     parser.add_argument('--only-speech', '-s', action='store_true', help='Train without motion')
+    parser.add_argument('--resume_from_checkpoint', '-c', type=str, default=None, help='Resume from checkpoint')
     args = parser.parse_args()      
+
     if args.only_speech:
         print('Note*: Only speech flag is True. training only speech model')
     
@@ -96,8 +99,8 @@ if __name__ == "__main__":
     print('Total parameters: %.2fm' % (model.nparams/1e6))
 
     print('Initializing optimizer...')
-    optimizer = torch.optim.Adam(params=model.parameters(), lr=learning_rate)
-
+    optimizer = torch.optim.Adam(params=model.parameters(), lr=learning_rate) 
+    
     print('Logging test batch...')
     test_batch = test_dataset.sample_test_batch(size=params.test_size)
     for i, item in enumerate(test_batch):
@@ -110,10 +113,21 @@ if __name__ == "__main__":
             logger.add_image(f'image_{i}/ground_truth_motion', plot_tensor(motion.squeeze()),
                             global_step=0, dataformats='HWC')
             save_plot(motion.squeeze(), f'{log_dir}/original_motion_{i}.png')
+            
+    if args.resume_from_checkpoint is not None:
+        print('[*] Loading checkpoint from {}'.format(args.resume_from_checkpoint))
+        ckpt = torch.load(args.resume_from_checkpoint)    
+        model.load_state_dict(ckpt['model'])
+        optimizer.load_state_dict(ckpt['optimizer'])
+        compare_parameters(params, ckpt['params'])
+        iteration = ckpt['iteration']
+        start_epoch = ckpt['epoch']
+    else:
+        iteration = 0
+        start_epoch = 1
 
     print('Start training...')
-    iteration = 0
-    for epoch in range(1, n_epochs + 1):
+    for epoch in range(start_epoch, n_epochs + 1):
         model.train()
         dur_losses = []
         prior_losses = []
@@ -202,5 +216,11 @@ if __name__ == "__main__":
                 save_plot(attn.squeeze().cpu(), 
                           f'{log_dir}/alignment_{i}.png')
 
-        ckpt = model.state_dict()
+        ckpt = {
+            'model': model.state_dict(),
+            'params': module_to_namespace(params),
+            'optimizer': optimizer.state_dict(),
+            'epoch': epoch,
+            'iteration': iteration,
+        }
         torch.save(ckpt, f=f"{log_dir}/grad_{epoch}.pt")

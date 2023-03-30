@@ -9,6 +9,7 @@
 import glob
 import os
 import subprocess
+from argparse import Namespace
 from pathlib import Path
 
 import matplotlib.pyplot as plt
@@ -126,3 +127,46 @@ def combine_video_audio(video_filename, audio_filename, final_filename):
     subprocess.check_call(command, shell=True)
     Path(video_filename).unlink()
     Path(audio_filename).unlink()
+    
+def get_dir_without_underscore(variable):
+    return [x for x in dir(variable) if x[0] != "_"]
+    
+def compare_parameters(new, old):
+    new_parameters = {}
+    modified_parameters = {}
+    new_params = get_dir_without_underscore(new)
+    old_params = get_dir_without_underscore(old)
+    for param in new_params:
+        if param in old_params:
+            new_param = getattr(new, param)
+            old_param = getattr(old, param)
+            if new_param != old_param:
+                modified_parameters[param] = {
+                    'new': new_param,
+                    'old': old_param
+                    }
+            old_params.remove(param)
+        else:
+            new_parameters[param] = new_param
+    
+    if len(modified_parameters) > 0: 
+        print('Modified parameters:')
+        for key, param in modified_parameters.items():
+            print(f"\t{key}:")
+            print(f"\t\tOld: {param['old']}")
+            print(f"\t\tNew: {param['new']}")
+    
+    if len(new_parameters) > 0:
+        print('New parameters:')
+        for key, param in new_parameters.items():
+            print(f"\t{key}:")
+            print(f"\t\t{param}")
+    
+    if len(old_params) > 0:
+        print('Removed parameters:')
+        for param in old_params:
+            print(f"\t{param} : {getattr(old, param)}")
+            
+
+def module_to_namespace(module):
+    return Namespace(**{k: getattr(module, k) for k in get_dir_without_underscore(module) if not k.startswith('_')})
