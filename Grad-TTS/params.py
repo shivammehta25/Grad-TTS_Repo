@@ -18,7 +18,7 @@ add_blank = True
 n_spks = 1  # 247 for Libri-TTS filelist and 1 for LJSpeech
 spk_emb_dim = 64
 n_feats = 80 
-n_motions = 45
+n_motions = 48
 n_fft = 1024
 sample_rate = 22050
 hop_length = 256
@@ -64,3 +64,4 @@ mu_motion_encoder_params = {
                 "dropatt": 0.1,
                 "conv_kernel_size": 21,
 }
+decoder_motion_type = "gradtts" # [wavegrad, gradtts]

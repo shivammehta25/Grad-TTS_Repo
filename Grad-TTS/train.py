@@ -58,6 +58,7 @@ beta_max = params.beta_max
 pe_scale = params.pe_scale
 
 mu_motion_encoder_params = params.mu_motion_encoder_params
+decoder_motion_type = params.decoder_motion_type
 
 
 if __name__ == "__main__":
@@ -89,7 +90,7 @@ if __name__ == "__main__":
     print('Initializing model...')
     model = GradTTS(nsymbols, 1, None, n_enc_channels, filter_channels, filter_channels_dp, 
                     n_heads, n_enc_layers, enc_kernel, enc_dropout, window_size, 
-                    n_feats, n_motions, dec_dim, beta_min, beta_max, pe_scale, mu_motion_encoder_params, args.only_speech).cuda()
+                    n_feats, n_motions, dec_dim, beta_min, beta_max, pe_scale, mu_motion_encoder_params, decoder_motion_type, args.only_speech).cuda()
     print('Number of encoder + duration predictor parameters: %.2fm' % (model.encoder.nparams/1e6))
     print('Number of decoder parameters: %.2fm' % (model.decoder.nparams/1e6))
     print('Total parameters: %.2fm' % (model.nparams/1e6))

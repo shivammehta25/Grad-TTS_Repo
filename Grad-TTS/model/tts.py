@@ -22,7 +22,7 @@ from model.utils import (duration_loss, fix_len_compatibility, generate_path,
 class GradTTS(BaseModule):
     def __init__(self, n_vocab, n_spks, spk_emb_dim, n_enc_channels, filter_channels, filter_channels_dp, 
                  n_heads, n_enc_layers, enc_kernel, enc_dropout, window_size, 
-                 n_feats, n_motions, dec_dim, beta_min, beta_max, pe_scale, mu_motion_encoder_params, only_speech):
+                 n_feats, n_motions, dec_dim, beta_min, beta_max, pe_scale, mu_motion_encoder_params, decoder_motion_type, only_speech=False):
         super(GradTTS, self).__init__()
         self.n_vocab = n_vocab
         self.n_spks = n_spks
@@ -56,12 +56,22 @@ class GradTTS(BaseModule):
                 output_channels=n_motions,
                 **mu_motion_encoder_params
             )
-            
-            self.decoder_motion = Diffusion_Motion(
-                in_channels=n_motions,
-                beta_min=beta_min,
-                beta_max=beta_max,
-            )
+            if decoder_motion_type == 'wavegrad': 
+                self.decoder_motion = Diffusion_Motion(
+                    in_channels=n_motions,
+                    beta_min=beta_min,
+                    beta_max=beta_max,
+                )
+            elif decoder_motion_type == 'gradtts': 
+                self.decoder_motion = Diffusion(
+                    n_feats=n_motions,
+                    dim = dec_dim,
+                    n_spks=n_spks,
+                    spk_emb_dim=spk_emb_dim,
+                    beta_min=beta_min,
+                    beta_max=beta_max,
+                    pe_scale=pe_scale
+                )
 
     @torch.no_grad()
     def forward(self, x, x_lengths, n_timesteps, temperature=1.0, stoc=False, spk=None, length_scale=1.0):
