@@ -6,6 +6,8 @@
 # MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
 # MIT License for more details.
 
+import argparse
+
 import numpy as np
 import torch
 from torch.utils.data import DataLoader
@@ -59,6 +61,13 @@ mu_motion_encoder_params = params.mu_motion_encoder_params
 
 
 if __name__ == "__main__":
+    
+    parser = argparse.ArgumentParser(description='Train GradTTS')
+    parser.add_argument('--only-speech', '-s', action='store_true', help='Train without motion')
+    args = parser.parse_args()      
+    if args.only_speech:
+        print('Note*: Only speech flag is True. training only speech model')
+    
     torch.manual_seed(random_seed)
     np.random.seed(random_seed)
 
@@ -80,7 +89,7 @@ if __name__ == "__main__":
     print('Initializing model...')
     model = GradTTS(nsymbols, 1, None, n_enc_channels, filter_channels, filter_channels_dp, 
                     n_heads, n_enc_layers, enc_kernel, enc_dropout, window_size, 
-                    n_feats, n_motions, dec_dim, beta_min, beta_max, pe_scale, mu_motion_encoder_params).cuda()
+                    n_feats, n_motions, dec_dim, beta_min, beta_max, pe_scale, mu_motion_encoder_params, args.only_speech).cuda()
     print('Number of encoder + duration predictor parameters: %.2fm' % (model.encoder.nparams/1e6))
     print('Number of decoder parameters: %.2fm' % (model.decoder.nparams/1e6))
     print('Total parameters: %.2fm' % (model.nparams/1e6))
@@ -96,10 +105,10 @@ if __name__ == "__main__":
         logger.add_image(f'image_{i}/ground_truth', plot_tensor(mel.squeeze()),
                          global_step=0, dataformats='HWC')
         save_plot(mel.squeeze(), f'{log_dir}/original_{i}.png')
-        
-        logger.add_image(f'image_{i}/ground_truth_motion', plot_tensor(motion.squeeze()),
-                         global_step=0, dataformats='HWC')
-        save_plot(motion.squeeze(), f'{log_dir}/original_motion_{i}.png')
+        if not args.only_speech: 
+            logger.add_image(f'image_{i}/ground_truth_motion', plot_tensor(motion.squeeze()),
+                            global_step=0, dataformats='HWC')
+            save_plot(motion.squeeze(), f'{log_dir}/original_motion_{i}.png')
 
     print('Start training...')
     iteration = 0
@@ -163,19 +172,20 @@ if __name__ == "__main__":
             for i, item in enumerate(test_batch):
                 x = item['x'].to(torch.long).unsqueeze(0).cuda()
                 x_lengths = torch.LongTensor([x.shape[-1]]).cuda()
-                y_enc, y_dec, y_motion_enc, y_motion_dec, attn = model(x, x_lengths, n_timesteps=50)
+                y_enc, y_dec, y_motion_enc, y_motion_dec, attn = model(x, x_lengths, n_timesteps=20)
                 logger.add_image(f'image_{i}/generated_enc',
                                  plot_tensor(y_enc.squeeze().cpu()),
                                  global_step=iteration, dataformats='HWC')
                 logger.add_image(f'image_{i}/generated_dec',
                                  plot_tensor(y_dec.squeeze().cpu()),
                                  global_step=iteration, dataformats='HWC')
-                logger.add_image(f'image_{i}/generated_enc',
-                                 plot_tensor(y_motion_enc.squeeze().cpu()),
-                                 global_step=iteration, dataformats='HWC')
-                logger.add_image(f'image_{i}/generated_dec',
-                                 plot_tensor(y_motion_dec.squeeze().cpu()),
-                                 global_step=iteration, dataformats='HWC')
+                if not args.only_speech:
+                    logger.add_image(f'image_{i}/generated_enc',
+                                    plot_tensor(y_motion_enc.squeeze().cpu()),
+                                    global_step=iteration, dataformats='HWC')
+                    logger.add_image(f'image_{i}/generated_dec',
+                                    plot_tensor(y_motion_dec.squeeze().cpu()),
+                                    global_step=iteration, dataformats='HWC')
                 logger.add_image(f'image_{i}/alignment',
                                  plot_tensor(attn.squeeze().cpu()),
                                  global_step=iteration, dataformats='HWC')
@@ -183,10 +193,11 @@ if __name__ == "__main__":
                           f'{log_dir}/generated_enc_{i}.png')
                 save_plot(y_dec.squeeze().cpu(), 
                           f'{log_dir}/generated_dec_{i}.png')
-                save_plot(y_motion_enc.squeeze().cpu(), 
-                          f'{log_dir}/generated_enc_motion_{i}.png')
-                save_plot(y_motion_dec.squeeze().cpu(), 
-                          f'{log_dir}/generated_dec_motion_{i}.png')
+                if not args.only_speech:
+                    save_plot(y_motion_enc.squeeze().cpu(), 
+                            f'{log_dir}/generated_enc_motion_{i}.png')
+                    save_plot(y_motion_dec.squeeze().cpu(), 
+                            f'{log_dir}/generated_dec_motion_{i}.png')
                 save_plot(attn.squeeze().cpu(), 
                           f'{log_dir}/alignment_{i}.png')
 
