@@ -21,7 +21,7 @@ from model.utils import fix_len_compatibility
 from params import seed as random_seed
 from text import cmudict, text_to_sequence
 from text.symbols import symbols
-from utils import intersperse, parse_filelist
+from utils import intersperse, normalize, parse_filelist
 
 sys.path.insert(0, 'hifi-gan')
 from meldataset import mel_spectrogram
@@ -30,7 +30,7 @@ from meldataset import mel_spectrogram
 class TextMelDataset(torch.utils.data.Dataset):
     def __init__(self, filelist_path, cmudict_path, motion_folder, add_blank=True,
                  n_fft=1024, n_mels=80, sample_rate=22050,
-                 hop_length=256, win_length=1024, f_min=0., f_max=8000):
+                 hop_length=256, win_length=1024, f_min=0., f_max=8000, data_parameters=None):
         self.filepaths_and_text = parse_filelist(filelist_path)
         self.motion_fileloc = Path(motion_folder)        
         self.cmudict = cmudict.CMUDict(cmudict_path)
@@ -42,6 +42,7 @@ class TextMelDataset(torch.utils.data.Dataset):
         self.win_length = win_length
         self.f_min = f_min
         self.f_max = f_max
+        self.data_parameters = data_parameters
         random.seed(random_seed)
         random.shuffle(self.filepaths_and_text)
 
@@ -56,9 +57,10 @@ class TextMelDataset(torch.utils.data.Dataset):
         file_loc = self.motion_fileloc / Path(Path(filename).name).with_suffix(ext)
         motion = torch.from_numpy(pd.read_pickle(file_loc).to_numpy())
         motion = F.interpolate(motion.T.unsqueeze(0), mel_shape).squeeze(0)
-        c, t = motion.shape
-        c_fixed = fix_len_compatibility(c)
-        motion = pack([torch.zeros(c_fixed - c, t), motion], '* t')[0]
+        # c, t = motion.shape
+        # c_fixed = fix_len_compatibility(c)
+        # motion = pack([torch.zeros(c_fixed - c, t), motion], '* t')[0]
+        motion = normalize(motion, self.data_parameters['motion_mean'], self.data_parameters['motion_std'])
         return motion 
 
     def get_mel(self, filepath):
@@ -66,6 +68,7 @@ class TextMelDataset(torch.utils.data.Dataset):
         assert sr == self.sample_rate
         mel = mel_spectrogram(audio, self.n_fft, 80, self.sample_rate, self.hop_length,
                               self.win_length, self.f_min, self.f_max, center=False).squeeze()
+        mel = normalize(mel, self.data_parameters['mel_mean'], self.data_parameters['mel_std'])
         return mel
 
     def get_text(self, text, add_blank=True):
