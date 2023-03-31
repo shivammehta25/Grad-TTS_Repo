@@ -152,28 +152,17 @@ class WaveGrad(nn.Module):
   def __init__(self, in_channels=80, out_channels=80):
     super().__init__()
     self.downsample = nn.ModuleList([
-        Conv1d(in_channels, 32, 5, padding=2),
-        DBlock(32, 128, 1),
-        DBlock(128, 128, 1),
+        Conv1d(in_channels, 128, 5, padding=2),
         DBlock(128, 256, 1),
-        DBlock(256, 512, 1),
     ])
     self.film = nn.ModuleList([
-        FiLM(32, 128),
-        FiLM(128, 128),
         FiLM(128, 256),
-        FiLM(256, 512),
-        FiLM(512, 512),
     ])
     self.upsample = nn.ModuleList([
-        UBlock(768, 512, 1, [1, 2, 1, 2]),
-        UBlock(512, 512, 1, [1, 2, 1, 2]),
-        UBlock(512, 256, 1, [1, 2, 4, 8]),
-        UBlock(256, 128, 1, [1, 2, 4, 8]),
-        UBlock(128, 128, 1, [1, 2, 4, 8]),
+        UBlock(256, 256, 1, [1, 1, 1, 1]),
     ])
-    self.first_conv = Conv1d(in_channels, 768, 3, padding=1)
-    self.last_conv = Conv1d(128, out_channels, 3, padding=1)
+    self.first_conv = Conv1d(in_channels, 256, 3, padding=1)
+    self.last_conv = Conv1d(256, out_channels, 3, padding=1)
 
   def forward(self, audio, mask, spectrogram, noise_scale, spk=None):
     x = audio

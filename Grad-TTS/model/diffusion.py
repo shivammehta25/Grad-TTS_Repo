@@ -13,6 +13,7 @@ from diffusers import UNet1DModel, UNet2DModel
 from einops import pack, rearrange
 
 from model.base import BaseModule
+from model.my_wavegrad import WaveGradNN
 from model.wavegrad import WaveGrad
 
 
@@ -262,11 +263,12 @@ class Diffusion(BaseModule):
         self.beta_max = beta_max
         self.pe_scale = pe_scale
         
-        self.estimator = GradLogPEstimator2d(dim, n_spks=n_spks,
-                                             spk_emb_dim=spk_emb_dim,
-                                             pe_scale=pe_scale)
-        # self.estimator = UNet1DDiffuser()
+        # self.estimator = GradLogPEstimator2d(dim, n_spks=n_spks,
+                                            #  spk_emb_dim=spk_emb_dim,
+                                            #  pe_scale=pe_scale)
+        self.estimator = UNet1DDiffuser()
         # self.estimator = WaveGrad()
+        # self.estimator = WaveGradNN()
 
     def forward_diffusion(self, x0, mask, mu, t):
         time = t.unsqueeze(-1).unsqueeze(-1)
