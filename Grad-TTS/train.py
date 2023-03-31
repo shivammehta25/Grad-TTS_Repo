@@ -90,7 +90,7 @@ if __name__ == "__main__":
     batch_collate = TextMelBatchCollate()
     loader = DataLoader(dataset=train_dataset, batch_size=batch_size,
                         collate_fn=batch_collate, drop_last=True,
-                        num_workers=4, shuffle=False)
+                        num_workers=32, shuffle=False)
     test_dataset = TextMelDataset(valid_filelist_path, cmudict_path, motion_folder, add_blank,
                                   n_fft, n_feats, sample_rate, hop_length,
                                   win_length, f_min, f_max, data_parameters)
@@ -127,13 +127,13 @@ if __name__ == "__main__":
         optimizer.load_state_dict(ckpt['optimizer'])
         compare_parameters(params, ckpt['params'])
         iteration = ckpt['iteration']
-        start_epoch = ckpt['epoch']
+        start_epoch = ckpt['epoch'] 
     else:
         iteration = 0
-        start_epoch = 1
+        start_epoch = 0 
 
     print('Start training...')
-    for epoch in range(start_epoch, n_epochs + 1):
+    for epoch in range(start_epoch + 1, n_epochs + 1):
         model.train()
         dur_losses = []
         prior_losses = []

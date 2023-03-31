@@ -9,7 +9,8 @@
 import math
 
 import torch
-from einops import rearrange
+from diffusers import UNet1DModel
+from einops import pack, rearrange
 
 from model.base import BaseModule
 from model.wavegrad import WaveGrad
@@ -111,6 +112,26 @@ class Residual(BaseModule):
         output = self.fn(x, *args, **kwargs) + x
         return output
 
+
+class UNet1DDiffuser(BaseModule):
+    def __init__(self):
+        super(UNet1DDiffuser, self).__init__()
+        
+        self.unet = UNet1DModel(
+            in_channels=90,
+            out_channels=45,
+            down_block_types = ("DownBlock1DNoSkip", "AttnDownBlock1D"),
+            up_block_types = ("AttnUpBlock1D", "UpBlock1DNoSkip"),
+            mid_block_type = "UNetMidBlock1D",
+            block_out_channels = (256, 512),
+            use_timestep_embedding=True,
+        )
+        
+    
+    def forward(self, x, mask, mu, t, spk=None):
+        x = pack([x, mu], "b * t")[0]
+        
+        return self.unet(x, t).sample * mask
 
 class SinusoidalPosEmb(BaseModule):
     def __init__(self, dim):
@@ -303,9 +324,7 @@ class Diffusion_Motion(BaseModule):
         self.beta_min = beta_min
         self.beta_max = beta_max
         
-        self.estimator = WaveGrad(
-            in_channels=in_channels
-        )
+        self.estimator = UNet1DDiffuser()
 
     def forward_diffusion(self, x0, mask, mu, t):
         time = t.unsqueeze(-1).unsqueeze(-1)
