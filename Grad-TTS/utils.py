@@ -181,7 +181,7 @@ def denormalize(data, mu, std):
 
 def keep_top_k_checkpoints(logdir, checkpoint_dict, epoch, k=5):
     sorted_files = sorted(list(Path(logdir).glob('grad_*.pt')), key=lambda x: int(str(x.stem).split('_')[1]), reverse=True)
-    for file in sorted_files[k-1:]:
+    for file in sorted_files[k:]:
         file.unlink()
     torch.save(checkpoint_dict, Path(logdir) / f'grad_{epoch}.pt')
     
