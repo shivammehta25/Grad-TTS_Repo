@@ -7,8 +7,10 @@
 # MIT License for more details.
 
 import math
+
 import torch
-from einops import rearrange
+from diffusers import UNet1DModel, UNet2DModel
+from einops import pack, rearrange
 
 from model.base import BaseModule
 
@@ -123,6 +125,28 @@ class SinusoidalPosEmb(BaseModule):
         emb = scale * x.unsqueeze(1) * emb.unsqueeze(0)
         emb = torch.cat((emb.sin(), emb.cos()), dim=-1)
         return emb
+    
+
+class UNet1DDiffuser(BaseModule):
+    def __init__(self):
+        super(UNet1DDiffuser, self).__init__()
+        
+        self.unet = UNet1DModel(
+            in_channels=160,
+            out_channels=80,
+            down_block_types = ("DownBlock1DNoSkip", "AttnDownBlock1D"),
+            up_block_types = ("AttnUpBlock1D", "UpBlock1DNoSkip"),
+            mid_block_type = "UNetMidBlock1D",
+            block_out_channels = (256, 512),
+            use_timestep_embedding=True,
+        )
+        
+    
+    def forward(self, x, mask, mu, t, spk=None):
+        x = pack([x, mu], "b * t")[0]
+        
+        return self.unet(x, t).sample * mask
+        
 
 
 class GradLogPEstimator2d(BaseModule):
@@ -237,9 +261,10 @@ class Diffusion(BaseModule):
         self.beta_max = beta_max
         self.pe_scale = pe_scale
         
-        self.estimator = GradLogPEstimator2d(dim, n_spks=n_spks,
-                                             spk_emb_dim=spk_emb_dim,
-                                             pe_scale=pe_scale)
+        # self.estimator = GradLogPEstimator2d(dim, n_spks=n_spks,
+                                            #  spk_emb_dim=spk_emb_dim,
+                                            #  pe_scale=pe_scale)
+        self.estimator = UNet1DDiffuser()
 
     def forward_diffusion(self, x0, mask, mu, t):
         time = t.unsqueeze(-1).unsqueeze(-1)
