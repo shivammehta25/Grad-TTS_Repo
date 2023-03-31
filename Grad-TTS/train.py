@@ -18,8 +18,8 @@ import params
 from data import TextMelBatchCollate, TextMelDataset
 from model import GradTTS
 from text.symbols import symbols
-from utils import (compare_parameters, module_to_namespace, plot_tensor,
-                   save_plot)
+from utils import (compare_parameters, keep_top_k_checkpoints,
+                   module_to_namespace, plot_tensor, save_plot)
 
 train_filelist_path = params.train_filelist_path
 valid_filelist_path = params.valid_filelist_path
@@ -221,7 +221,7 @@ if __name__ == "__main__":
                             f'{log_dir}/generated_dec_motion_{i}.png')
                 save_plot(attn.squeeze().cpu(), 
                           f'{log_dir}/alignment_{i}.png')
-
+        
         ckpt = {
             'model': model.state_dict(),
             'params': module_to_namespace(params),
@@ -229,4 +229,4 @@ if __name__ == "__main__":
             'epoch': epoch,
             'iteration': iteration,
         }
-        torch.save(ckpt, f=f"{log_dir}/grad_{epoch}.pt")
+        keep_top_k_checkpoints(log_dir, ckpt, epoch, k=3)

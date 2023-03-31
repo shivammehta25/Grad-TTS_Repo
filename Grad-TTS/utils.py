@@ -177,3 +177,16 @@ def normalize(data, mu, std):
 
 def denormalize(data, mu, std):
     return data * std + mu
+
+
+def keep_top_k_checkpoints(logdir, checkpoint_dict, epoch, k=5):
+    sorted_files = sorted(list(Path(logdir).glob('grad_*.pt')), key=lambda x: int(str(x.stem).split('_')[1]), reverse=True)
+    for file in sorted_files[k-1:]:
+        file.unlink()
+    torch.save(checkpoint_dict, Path(logdir) / f'grad_{epoch}.pt')
+    
+    
+    
+if __name__ == '__main__':
+    keep_top_k_checkpoints('logs/test', {'test': 1, 'test2': 2})
+    

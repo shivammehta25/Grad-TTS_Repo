@@ -65,6 +65,7 @@ mu_motion_encoder_params = {
                 "dropconv": 0.1,
                 "dropatt": 0.1,
                 "conv_kernel_size": 21,
+                "prior_loss": False 
 }
 decoder_motion_type = "wavegrad" # [wavegrad, gradtts]
 motion_reduction_factor = 1 

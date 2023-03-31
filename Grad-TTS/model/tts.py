@@ -53,6 +53,13 @@ class GradTTS(BaseModule):
         self.decoder = Diffusion(n_feats, dec_dim, n_spks, spk_emb_dim, beta_min, beta_max, pe_scale)
         
         if self.generate_motion: 
+            # This is to load old checkpoints
+            if 'prior_loss' in mu_motion_encoder_params:
+                self.motion_prior_loss = mu_motion_encoder_params.pop('prior_loss')
+            else:
+                self.motion_prior_loss = False
+            # Remove once all checkpoints have prior loss as a parameter
+
             self.mu_motion_encoder = MuMotionEncoder(
                 input_channels=n_feats,
                 output_channels=n_motions,
@@ -242,7 +249,7 @@ class GradTTS(BaseModule):
         prior_loss = torch.sum(0.5 * ((y - mu_y) ** 2 + math.log(2 * math.pi)) * y_mask)
         prior_loss = prior_loss / (torch.sum(y_mask) * self.n_feats)
         
-        if self.generate_motion:
+        if self.generate_motion and self.motion_prior_loss:
             prior_loss_motion = torch.sum(0.5 * ((y_motion - mu_y_motion) ** 2 + math.log(2 * math.pi)) * y_motion_mask)
             prior_loss_motion = prior_loss_motion / (torch.sum(y_motion_mask) * self.n_motions)
         else:
