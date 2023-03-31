@@ -42,11 +42,11 @@ beta_max = 20.0
 pe_scale = 1000  # 1 for `grad-tts-old.pt` checkpoint
 
 # training parameters
-log_dir = 'logs/new_exp'
+log_dir = 'logs/test'
 test_size = 4
 n_epochs = 10000
-batch_size = 64
+batch_size =32 
 learning_rate = 3e-4
-seed = 37
+seed = 32
 save_every = 1
 out_size = fix_len_compatibility(2*22050//256)

@@ -7,18 +7,16 @@
 # MIT License for more details.
 
 import numpy as np
-from tqdm import tqdm
-
 import torch
 from torch.utils.data import DataLoader
 from torch.utils.tensorboard import SummaryWriter
+from tqdm import tqdm
 
 import params
+from data import TextMelBatchCollate, TextMelDataset
 from model import GradTTS
-from data import TextMelDataset, TextMelBatchCollate
-from utils import plot_tensor, save_plot
 from text.symbols import symbols
-
+from utils import plot_tensor, save_plot
 
 train_filelist_path = params.train_filelist_path
 valid_filelist_path = params.valid_filelist_path
@@ -70,7 +68,7 @@ if __name__ == "__main__":
     batch_collate = TextMelBatchCollate()
     loader = DataLoader(dataset=train_dataset, batch_size=batch_size,
                         collate_fn=batch_collate, drop_last=True,
-                        num_workers=4, shuffle=False)
+                        num_workers=32, shuffle=False)
     test_dataset = TextMelDataset(valid_filelist_path, cmudict_path, add_blank,
                                   n_fft, n_feats, sample_rate, hop_length,
                                   win_length, f_min, f_max)
@@ -79,6 +77,7 @@ if __name__ == "__main__":
     model = GradTTS(nsymbols, 1, None, n_enc_channels, filter_channels, filter_channels_dp, 
                     n_heads, n_enc_layers, enc_kernel, enc_dropout, window_size, 
                     n_feats, dec_dim, beta_min, beta_max, pe_scale).cuda()
+    
     print('Number of encoder + duration predictor parameters: %.2fm' % (model.encoder.nparams/1e6))
     print('Number of decoder parameters: %.2fm' % (model.decoder.nparams/1e6))
     print('Total parameters: %.2fm' % (model.nparams/1e6))

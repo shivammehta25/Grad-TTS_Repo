@@ -13,6 +13,7 @@ from diffusers import UNet1DModel, UNet2DModel
 from einops import pack, rearrange
 
 from model.base import BaseModule
+from model.wavegrad import WaveGrad
 
 
 class Mish(BaseModule):
@@ -159,7 +160,7 @@ class GradLogPEstimator2d(BaseModule):
         self.n_spks = n_spks if not isinstance(n_spks, type(None)) else 1
         self.spk_emb_dim = spk_emb_dim
         self.pe_scale = pe_scale
-        
+         
         if n_spks > 1:
             self.spk_mlp = torch.nn.Sequential(torch.nn.Linear(spk_emb_dim, spk_emb_dim * 4), Mish(),
                                                torch.nn.Linear(spk_emb_dim * 4, n_feats))
@@ -201,7 +202,7 @@ class GradLogPEstimator2d(BaseModule):
         
         t = self.time_pos_emb(t, scale=self.pe_scale)
         t = self.mlp(t)
-
+        
         if self.n_spks < 2:
             x = torch.stack([mu, x], 1)
         else:
@@ -261,10 +262,11 @@ class Diffusion(BaseModule):
         self.beta_max = beta_max
         self.pe_scale = pe_scale
         
-        # self.estimator = GradLogPEstimator2d(dim, n_spks=n_spks,
-                                            #  spk_emb_dim=spk_emb_dim,
-                                            #  pe_scale=pe_scale)
-        self.estimator = UNet1DDiffuser()
+        self.estimator = GradLogPEstimator2d(dim, n_spks=n_spks,
+                                             spk_emb_dim=spk_emb_dim,
+                                             pe_scale=pe_scale)
+        # self.estimator = UNet1DDiffuser()
+        # self.estimator = WaveGrad()
 
     def forward_diffusion(self, x0, mask, mu, t):
         time = t.unsqueeze(-1).unsqueeze(-1)
