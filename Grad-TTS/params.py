@@ -6,6 +6,10 @@
 # MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
 # MIT License for more details.
 
+# Note: Do not do highlevel imports here as import os; it will make the module unpickleable
+from os.path import exists
+from warnings import warn
+
 from torch import load
 
 from model.utils import fix_len_compatibility
@@ -20,7 +24,8 @@ add_blank = True
 n_spks = 1  # 247 for Libri-TTS filelist and 1 for LJSpeech
 spk_emb_dim = 64
 n_feats = 80 
-n_motions = 45
+n_motions = fix_len_compatibility(45)
+# n_motions = 45
 n_fft = 1024
 sample_rate = 22050
 hop_length = 256
@@ -36,7 +41,7 @@ n_enc_layers = 6
 enc_kernel = 3
 enc_dropout = 0.1
 n_heads = 2
-window_size = 4
+window_size = 10 
 
 # decoder parameters
 dec_dim = 128 
@@ -65,8 +70,12 @@ mu_motion_encoder_params = {
                 "dropconv": 0.1,
                 "dropatt": 0.1,
                 "conv_kernel_size": 21,
-                "prior_loss": False 
+                "prior_loss": True 
 }
 decoder_motion_type = "wavegrad" # [wavegrad, gradtts]
 motion_reduction_factor = 1 
-data_parameters = load("data_parameters.pt")
+if exists("data_statistics.pt"):
+    data_parameters = load("data_statistics.pt")
+else:
+    data_parameters = None
+    warn("data_statistics.pt not found. Please run generate_data_statistics.py first")

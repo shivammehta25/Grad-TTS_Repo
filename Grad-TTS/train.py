@@ -19,7 +19,7 @@ from data import TextMelBatchCollate, TextMelDataset
 from model import GradTTS
 from text.symbols import symbols
 from utils import (compare_parameters, keep_top_k_checkpoints,
-                   module_to_namespace, plot_tensor, save_plot)
+                   module_to_namespace, plot_tensor, save_every_n, save_plot)
 
 train_filelist_path = params.train_filelist_path
 valid_filelist_path = params.valid_filelist_path
@@ -201,10 +201,10 @@ if __name__ == "__main__":
                                  plot_tensor(y_dec.squeeze().cpu()),
                                  global_step=iteration, dataformats='HWC')
                 if not args.only_speech:
-                    logger.add_image(f'image_{i}/generated_enc',
+                    logger.add_image(f'image_{i}/generated_enc_motion',
                                     plot_tensor(y_motion_enc.squeeze().cpu()),
                                     global_step=iteration, dataformats='HWC')
-                    logger.add_image(f'image_{i}/generated_dec',
+                    logger.add_image(f'image_{i}/generated_dec_motion',
                                     plot_tensor(y_motion_dec.squeeze().cpu()),
                                     global_step=iteration, dataformats='HWC')
                 logger.add_image(f'image_{i}/alignment',
@@ -229,4 +229,5 @@ if __name__ == "__main__":
             'epoch': epoch,
             'iteration': iteration,
         }
-        keep_top_k_checkpoints(log_dir, ckpt, epoch, k=3)
+        keep_top_k_checkpoints(log_dir, ckpt, epoch, k=5)
+        save_every_n(log_dir, ckpt, epoch, n=100)

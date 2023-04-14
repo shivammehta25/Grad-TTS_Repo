@@ -324,7 +324,10 @@ class Diffusion_Motion(BaseModule):
         self.beta_min = beta_min
         self.beta_max = beta_max
         
-        self.estimator = UNet1DDiffuser()
+        self.estimator = GradLogPEstimator2d(128, n_spks=1,
+                                             spk_emb_dim=64,
+                                             pe_scale=1000) 
+        # self.estimator = UNet1DDiffuser()
 
     def forward_diffusion(self, x0, mask, mu, t):
         time = t.unsqueeze(-1).unsqueeze(-1)

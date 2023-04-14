@@ -130,6 +130,17 @@ def combine_video_audio(video_filename, audio_filename, final_filename):
     
 def get_dir_without_underscore(variable):
     return [x for x in dir(variable) if x[0] != "_"]
+
+def recursively_change_tensor_to_list(variable):
+    if isinstance(variable, torch.Tensor):
+        return variable.tolist()
+    elif isinstance(variable, dict):
+        return {key: recursively_change_tensor_to_list(value) for key, value in variable.items()}
+    elif isinstance(variable, list):
+        return [recursively_change_tensor_to_list(value) for value in variable]
+    else:
+        return variable
+    
     
 def compare_parameters(new, old):
     new_parameters = {}
@@ -138,8 +149,9 @@ def compare_parameters(new, old):
     old_params = get_dir_without_underscore(old)
     for param in new_params:
         if param in old_params:
-            new_param = getattr(new, param)
-            old_param = getattr(old, param)
+            new_param = recursively_change_tensor_to_list(getattr(new, param))
+            old_param = recursively_change_tensor_to_list(getattr(old, param))
+
             if new_param != old_param:
                 modified_parameters[param] = {
                     'new': new_param,
@@ -168,22 +180,65 @@ def compare_parameters(new, old):
             print(f"\t{param} : {getattr(old, param)}")
             
 
-def module_to_namespace(module):
-    return Namespace(**{k: getattr(module, k) for k in get_dir_without_underscore(module) if not k.startswith('_')})
+def module_to_namespace(module, modules_to_ignore=('torch', 'torch.nn', 'torch.nn.functional', 'warnings')):
+    return Namespace(**{k: getattr(module, k) for k in get_dir_without_underscore(module) if not k.startswith('_') and k not in modules_to_ignore})
 
 
 def normalize(data, mu, std):
+    if not isinstance(mu, float):
+        if isinstance(mu, list):
+            mu = torch.tensor(mu, dtype=data.dtype, device=data.device)
+        elif isinstance(mu, torch.Tensor):
+            mu = mu.to(data.device)
+        elif isinstance(mu, np.ndarray):
+            mu = torch.from_numpy(mu).to(data.device)
+        mu = mu.unsqueeze(-1)
+    
+    if not isinstance(std, float):
+        if isinstance(std, list):
+            std = torch.tensor(std, dtype=data.dtype, device=data.device)
+        elif isinstance(std, torch.Tensor):
+            std = std.to(data.device)
+        elif isinstance(std, np.ndarray):
+            std = torch.from_numpy(std).to(data.device)
+        std = std.unsqueeze(-1)
+        
     return (data - mu) / std
 
 def denormalize(data, mu, std):
+    if not isinstance(mu, float):
+        if isinstance(mu, list):
+            mu = torch.tensor(mu, dtype=data.dtype, device=data.device)
+        elif isinstance(mu, torch.Tensor):
+            mu = mu.to(data.device)
+        elif isinstance(mu, np.ndarray):
+            mu = torch.from_numpy(mu).to(data.device)
+        mu = mu.unsqueeze(-1) 
+        
+        
+    if not isinstance(std, float):
+        if isinstance(std, list):
+            std = torch.tensor(std, dtype=data.dtype, device=data.device)
+        elif isinstance(std, torch.Tensor):
+            std = std.to(data.device)
+        elif isinstance(std, np.ndarray):
+            std = torch.from_numpy(std).to(data.device)
+        std = std.unsqueeze(-1)
+
     return data * std + mu
 
 
 def keep_top_k_checkpoints(logdir, checkpoint_dict, epoch, k=5):
-    sorted_files = sorted(list(Path(logdir).glob('grad_*.pt')), key=lambda x: int(str(x.stem).split('_')[1]), reverse=True)
-    for file in sorted_files[k:]:
-        file.unlink()
+    if k is not None:
+        sorted_files = sorted(list(Path(logdir).glob('grad_*.pt')), key=lambda x: int(str(x.stem).split('_')[1]), reverse=True)
+        for file in sorted_files[k - 1:]:
+            file.unlink()
     torch.save(checkpoint_dict, Path(logdir) / f'grad_{epoch}.pt')
+    
+    
+def save_every_n(logdir, checkpoint_dict, epoch, n=100):
+    if epoch % n == 0:
+        torch.save(checkpoint_dict, Path(logdir) / f'epoch_{epoch}.pt')
     
     
     

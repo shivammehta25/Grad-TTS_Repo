@@ -42,7 +42,10 @@ class TextMelDataset(torch.utils.data.Dataset):
         self.win_length = win_length
         self.f_min = f_min
         self.f_max = f_max
-        self.data_parameters = data_parameters
+        if data_parameters is not None:
+            self.data_parameters = data_parameters
+        else:
+            self.data_parameters = { 'mel_mean': 0, 'mel_std': 1, 'motion_mean': 0, 'motion_std': 1 }
         random.seed(random_seed)
         random.shuffle(self.filepaths_and_text)
 
@@ -57,10 +60,10 @@ class TextMelDataset(torch.utils.data.Dataset):
         file_loc = self.motion_fileloc / Path(Path(filename).name).with_suffix(ext)
         motion = torch.from_numpy(pd.read_pickle(file_loc).to_numpy())
         motion = F.interpolate(motion.T.unsqueeze(0), mel_shape).squeeze(0)
-        # c, t = motion.shape
-        # c_fixed = fix_len_compatibility(c)
-        # motion = pack([torch.zeros(c_fixed - c, t), motion], '* t')[0]
         motion = normalize(motion, self.data_parameters['motion_mean'], self.data_parameters['motion_std'])
+        c, t = motion.shape
+        c_fixed = fix_len_compatibility(c)
+        motion = pack([torch.randn(c_fixed - c, t), motion], '* t')[0]
         return motion 
 
     def get_mel(self, filepath):
