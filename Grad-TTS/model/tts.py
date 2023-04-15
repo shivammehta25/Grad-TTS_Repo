@@ -23,7 +23,7 @@ class GradTTS(BaseModule):
     def __init__(self, n_vocab, n_spks, spk_emb_dim, n_enc_channels, filter_channels, filter_channels_dp, 
                  n_heads, n_enc_layers, enc_kernel, enc_dropout, window_size, 
                  n_feats, n_motions, dec_dim, beta_min, beta_max, pe_scale, 
-                 mu_motion_encoder_params, decoder_motion_type, motion_reduction_factor, only_speech=False):
+                 mu_motion_encoder_params, decoder_motion_type, motion_reduction_factor, only_speech=False, encoder_type="default"):
         super(GradTTS, self).__init__()
         self.n_vocab = n_vocab
         self.n_spks = n_spks
@@ -49,7 +49,7 @@ class GradTTS(BaseModule):
             self.spk_emb = torch.nn.Embedding(n_spks, spk_emb_dim)
         self.encoder = TextEncoder(n_vocab, n_feats, n_enc_channels, 
                                    filter_channels, filter_channels_dp, n_heads, 
-                                   n_enc_layers, enc_kernel, enc_dropout, window_size)
+                                   n_enc_layers, enc_kernel, enc_dropout, window_size, encoder_type=encoder_type)
         self.decoder = Diffusion(n_feats, dec_dim, n_spks, spk_emb_dim, beta_min, beta_max, pe_scale)
         
         if self.generate_motion: 

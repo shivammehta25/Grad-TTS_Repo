@@ -8,6 +8,7 @@ from conformer import ConformerBlock
 from einops import rearrange
 
 from model.base import BaseModule
+from model.transformer import FFTransformer
 from model.utils import convert_pad_shape, sequence_mask
 
 
@@ -284,7 +285,7 @@ class Encoder(BaseModule):
 class TextEncoder(BaseModule):
     def __init__(self, n_vocab, n_feats, n_channels, filter_channels, 
                  filter_channels_dp, n_heads, n_layers, kernel_size, 
-                 p_dropout, window_size=None, spk_emb_dim=64, n_spks=1):
+                 p_dropout, window_size=None, spk_emb_dim=64, n_spks=1, encoder_type=None):
         super(TextEncoder, self).__init__()
         self.n_vocab = n_vocab
         self.n_feats = n_feats
@@ -304,10 +305,18 @@ class TextEncoder(BaseModule):
 
         self.prenet = ConvReluNorm(n_channels, n_channels, n_channels, 
                                    kernel_size=5, n_layers=3, p_dropout=0.5)
-
-        self.encoder = Encoder(n_channels + (spk_emb_dim if n_spks > 1 else 0), filter_channels, n_heads, n_layers, 
-                               kernel_size, p_dropout, window_size=window_size)
-
+        if encoder_type == "default":
+            self.encoder = Encoder(n_channels + (spk_emb_dim if n_spks > 1 else 0), filter_channels, n_heads, n_layers, 
+                                kernel_size, p_dropout, window_size=window_size)
+        elif encoder_type == "myencoder":
+            self.encoder = FFTransformer(
+                n_layers, n_heads, n_channels + (spk_emb_dim if n_spks > 1 else 0), 64, 1024, kernel_size,
+                p_dropout, p_dropout, rel_attention=True, rel_window_size=window_size
+            )
+        else:
+            raise ValueError(f"Unknown encoder type: {encoder_type}")
+        
+        
         self.proj_m = torch.nn.Conv1d(n_channels + (spk_emb_dim if n_spks > 1 else 0), n_feats, 1)
         self.proj_w = DurationPredictor(n_channels + (spk_emb_dim if n_spks > 1 else 0), filter_channels_dp, 
                                         kernel_size, p_dropout)

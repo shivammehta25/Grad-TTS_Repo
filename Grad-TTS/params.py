@@ -34,6 +34,7 @@ f_min = 0
 f_max = 8000
 
 # encoder parameters
+encoder_type="myencoder"
 n_enc_channels = 192
 filter_channels = 768
 filter_channels_dp = 256
@@ -74,8 +75,8 @@ mu_motion_encoder_params = {
 }
 decoder_motion_type = "wavegrad" # [wavegrad, gradtts]
 motion_reduction_factor = 1 
-if exists("data_statistics.pt"):
-    data_parameters = load("data_statistics.pt")
+if exists("data_parameters_of.pt"):
+    data_parameters = load("data_parameters_of.pt")
 else:
     data_parameters = None
-    warn("data_statistics.pt not found. Please run generate_data_statistics.py first")
+    warn("data_parameters_of.pt not found. Please run generate_data_statistics.py first")
