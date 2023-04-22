@@ -101,6 +101,21 @@ class GradTTS(BaseModule):
                 Increase value to slow down generated speech and vice versa.
         """
         x, x_lengths = self.relocate_input([x, x_lengths])
+        
+        if isinstance(n_timesteps, dict):
+            n_timestep_mel = n_timesteps['mel']
+            n_timestep_motion = n_timesteps['motion']
+        else:
+            n_timestep_mel = n_timesteps
+            n_timestep_motion = n_timesteps
+        
+        if isinstance(temperature, dict):
+            temperature_mel = temperature['mel']
+            temperature_motion = temperature['motion']
+        else:
+            temperature_mel = temperature
+            temperature_motion = temperature
+            
 
         if self.n_spks > 1:
             # Get speaker embedding
@@ -127,9 +142,9 @@ class GradTTS(BaseModule):
         
         
         # Sample latent representation from terminal distribution N(mu_y, I)
-        z = mu_y + torch.randn_like(mu_y, device=mu_y.device) / temperature
+        z = mu_y + torch.randn_like(mu_y, device=mu_y.device) / temperature_mel
         # Generate sample by performing reverse dynamics
-        decoder_outputs = self.decoder(z, y_mask, mu_y, n_timesteps, stoc, spk)
+        decoder_outputs = self.decoder(z, y_mask, mu_y, n_timestep_mel, stoc, spk)
         decoder_outputs = decoder_outputs[:, :, :y_max_length]
 
         if self.generate_motion:
@@ -138,9 +153,9 @@ class GradTTS(BaseModule):
             mu_y_motion = self.mu_motion_encoder(mu_y_motion, y_motion_mask)
             encoder_outputs_motion = mu_y_motion[:, :, :y_max_length]
             # sample latent representation from terminal distribution N(mu_y_motion, I)
-            z_motion = mu_y_motion + torch.randn_like(mu_y_motion, device=mu_y_motion.device) / temperature 
+            z_motion = mu_y_motion + torch.randn_like(mu_y_motion, device=mu_y_motion.device) / temperature_motion 
             # Generate sample by performing reverse dynamics
-            decoder_outputs_motion = self.decoder_motion(z_motion, y_motion_mask, mu_y_motion, n_timesteps, stoc, spk)
+            decoder_outputs_motion = self.decoder_motion(z_motion, y_motion_mask, mu_y_motion, n_timestep_motion, stoc, spk)
             decoder_outputs_motion = decoder_outputs_motion[:, :, :y_max_length]
         else:
             decoder_outputs_motion = None

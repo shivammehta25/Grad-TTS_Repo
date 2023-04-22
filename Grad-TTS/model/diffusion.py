@@ -114,16 +114,16 @@ class Residual(BaseModule):
 
 
 class UNet1DDiffuser(BaseModule):
-    def __init__(self):
+    def __init__(self, in_channels=90, out_channels=45, block_out_channels=(256, 512)):
         super(UNet1DDiffuser, self).__init__()
         
         self.unet = UNet1DModel(
-            in_channels=90,
-            out_channels=45,
+            in_channels=in_channels,
+            out_channels=out_channels,
             down_block_types = ("DownBlock1DNoSkip", "AttnDownBlock1D"),
             up_block_types = ("AttnUpBlock1D", "UpBlock1DNoSkip"),
             mid_block_type = "UNetMidBlock1D",
-            block_out_channels = (256, 512),
+            block_out_channels=block_out_channels,
             use_timestep_embedding=True,
         )
         
@@ -262,6 +262,7 @@ class Diffusion(BaseModule):
         self.estimator = GradLogPEstimator2d(dim, n_spks=n_spks,
                                              spk_emb_dim=spk_emb_dim,
                                              pe_scale=pe_scale)
+        # self.estimator = UNet1DDiffuser(n_feats * 2, n_feats , (256, 256)) #, block_out_channels=(256, 256))
 
     def forward_diffusion(self, x0, mask, mu, t):
         time = t.unsqueeze(-1).unsqueeze(-1)
@@ -324,10 +325,11 @@ class Diffusion_Motion(BaseModule):
         self.beta_min = beta_min
         self.beta_max = beta_max
         
-        self.estimator = GradLogPEstimator2d(128, n_spks=1,
-                                             spk_emb_dim=64,
-                                             pe_scale=1000) 
-        # self.estimator = UNet1DDiffuser()
+        # self.estimator = GradLogPEstimator2d(128, n_spks=1,
+        #                                      spk_emb_dim=64,
+        #                                      pe_scale=1000) 
+        # self.estimator = UNet1DDiffuser(block_out_channels=(256, 256))
+        self.estimator = UNet1DDiffuser()
 
     def forward_diffusion(self, x0, mask, mu, t):
         time = t.unsqueeze(-1).unsqueeze(-1)

@@ -24,8 +24,8 @@ add_blank = True
 n_spks = 1  # 247 for Libri-TTS filelist and 1 for LJSpeech
 spk_emb_dim = 64
 n_feats = 80 
-n_motions = fix_len_compatibility(45)
-# n_motions = 45
+# n_motions = fix_len_compatibility(45)
+n_motions = 45
 n_fft = 1024
 sample_rate = 22050
 hop_length = 256
@@ -34,7 +34,7 @@ f_min = 0
 f_max = 8000
 
 # encoder parameters
-encoder_type="myencoder"
+encoder_type="myencoder" # default and myencoder
 n_enc_channels = 192
 filter_channels = 768
 filter_channels_dp = 256
@@ -54,11 +54,12 @@ pe_scale = 1000  # 1 for `grad-tts-old.pt` checkpoint
 log_dir = 'logs/{}'
 test_size = 4
 n_epochs = 10000
-batch_size = 24 
-learning_rate = 1e-4
+batch_size = 32 
+learning_rate = 3e-4
 seed = 37
 save_every = 1
 out_size = fix_len_compatibility(2*22050//256) 
+# out_size = None
 
 mu_motion_encoder_params = {
                 "hidden_channels": 384,

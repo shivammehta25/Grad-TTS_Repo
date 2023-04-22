@@ -61,9 +61,9 @@ class TextMelDataset(torch.utils.data.Dataset):
         motion = torch.from_numpy(pd.read_pickle(file_loc).to_numpy())
         motion = F.interpolate(motion.T.unsqueeze(0), mel_shape).squeeze(0)
         motion = normalize(motion, self.data_parameters['motion_mean'], self.data_parameters['motion_std'])
-        c, t = motion.shape
-        c_fixed = fix_len_compatibility(c)
-        motion = pack([torch.randn(c_fixed - c, t), motion], '* t')[0]
+        # c, t = motion.shape
+        # c_fixed = fix_len_compatibility(c)
+        # motion = pack([torch.randn(c_fixed - c, t), motion], '* t')[0]
         return motion 
 
     def get_mel(self, filepath):
