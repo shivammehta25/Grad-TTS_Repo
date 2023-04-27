@@ -34,7 +34,7 @@ f_min = 0
 f_max = 8000
 
 # encoder parameters
-encoder_type="myencoder" # default and myencoder
+encoder_type="default" # default and myencoder
 n_enc_channels = 192
 filter_channels = 768
 filter_channels_dp = 256
@@ -42,10 +42,10 @@ n_enc_layers = 6
 enc_kernel = 3
 enc_dropout = 0.1
 n_heads = 2
-window_size = 10 
+window_size = 9 
 
 # decoder parameters
-dec_dim = 128 
+dec_dim = 64 
 beta_min = 0.05
 beta_max = 20.0
 pe_scale = 1000  # 1 for `grad-tts-old.pt` checkpoint
@@ -55,7 +55,7 @@ log_dir = 'logs/{}'
 test_size = 4
 n_epochs = 10000
 batch_size = 32 
-learning_rate = 3e-4
+learning_rate = 1e-4
 seed = 37
 save_every = 1
 out_size = fix_len_compatibility(2*22050//256) 

@@ -311,7 +311,7 @@ class TextEncoder(BaseModule):
         elif encoder_type == "myencoder":
             self.encoder = FFTransformer(
                 n_layers, n_heads, n_channels + (spk_emb_dim if n_spks > 1 else 0), 64, 1024, kernel_size,
-                p_dropout, p_dropout, rel_attention=True, rel_window_size=window_size
+                p_dropout, p_dropout, rel_attention=False, rel_window_size=window_size
             )
         else:
             raise ValueError(f"Unknown encoder type: {encoder_type}")
