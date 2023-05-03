@@ -81,6 +81,38 @@ class GradTTS(BaseModule):
                     beta_max=beta_max,
                     pe_scale=pe_scale
                 )
+        
+        
+        
+    def unfreeze_motion_decoder(self):
+        
+        print("Unfreezing motion components")
+        for param in self.mu_motion_encoder.parameters():
+            param.requires_grad = True
+        
+        for param in self.decoder_motion.parameters():
+            param.requires_grad = True
+    
+    def load_my_state_dict(self, state_dict):
+ 
+        own_state = self.state_dict()
+        total_params = 0
+        for name, param in state_dict.items():
+            if name not in own_state:
+                 continue
+            if isinstance(param, torch.nn.Parameter):
+                # backwards compatibility for serialized parameters
+                param = param.data
+            own_state[name].copy_(param)
+            print(f'Loaded: {name}')
+            total_params += param.numel()
+            
+        print(f"Total params loaded: {total_params: ,}")
+ 
+    def freeze_everything(self):
+        print("[+] Freezing everything")
+        for param in self.parameters():
+            param.requires_grad = False
 
     @torch.no_grad()
     def forward(self, x, x_lengths, n_timesteps, temperature=1.0, stoc=False, spk=None, length_scale=1.0):
@@ -204,8 +236,8 @@ class GradTTS(BaseModule):
             attn = attn.detach()
 
         # Compute loss between predicted log-scaled durations and those obtained from MAS
-        logw_ = torch.log(1e-8 + torch.sum(attn.unsqueeze(1), -1)) * x_mask
-        dur_loss = duration_loss(logw, logw_, x_lengths)
+        # logw_ = torch.log(1e-8 + torch.sum(attn.unsqueeze(1), -1)) * x_mask
+        # dur_loss = duration_loss(logw, logw_, x_lengths)
 
         # Cut a small segment of mel-spectrogram in order to increase batch size
         if not isinstance(out_size, type(None)):
@@ -248,7 +280,7 @@ class GradTTS(BaseModule):
         
 
         # Compute loss of score-based decoder
-        diff_loss, xt = self.decoder.compute_loss(y, y_mask, mu_y, spk)
+        # diff_loss, xt = self.decoder.compute_loss(y, y_mask, mu_y, spk)
         if self.generate_motion:
             # Reduce motion features
             mu_y_motion = mu_y[:, :, ::self.motion_reduction_factor]
@@ -269,5 +301,7 @@ class GradTTS(BaseModule):
             prior_loss_motion = prior_loss_motion / (torch.sum(y_motion_mask) * self.n_motions)
         else:
             prior_loss_motion = 0
-        
-        return dur_loss, prior_loss + prior_loss_motion, diff_loss + diff_loss_motion
+            
+
+        return diff_loss_motion.new_zeros(1), prior_loss_motion, diff_loss_motion        
+        # return dur_loss, prior_loss + prior_loss_motion, diff_loss + diff_loss_motion

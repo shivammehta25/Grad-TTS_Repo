@@ -124,15 +124,20 @@ if __name__ == "__main__":
     if args.resume_from_checkpoint is not None:
         print('[*] Loading checkpoint from {}'.format(args.resume_from_checkpoint))
         ckpt = torch.load(args.resume_from_checkpoint)    
-        model.load_state_dict(ckpt['model'])
-        optimizer.load_state_dict(ckpt['optimizer'])
+        model.load_my_state_dict(ckpt['model'])
+        # optimizer.load_state_dict(ckpt['optimizer'])
         compare_parameters(params, ckpt['params'])
-        iteration = ckpt['iteration']
-        start_epoch = ckpt['epoch'] 
+        # iteration = ckpt['iteration']
+        # start_epoch = ckpt['epoch'] 
+        iteration = 0
+        start_epoch = 0
     else:
         iteration = 0
         start_epoch = 0 
 
+    model.freeze_everything()
+    model.unfreeze_motion_decoder()
+    print('Total training parameters: %.2fm' % (model.nparams/1e6))
     print('Start training...')
     for epoch in range(start_epoch + 1, n_epochs + 1):
         model.train()
@@ -149,7 +154,7 @@ if __name__ == "__main__":
                                                                      y, y_lengths,
                                                                      y_motion, 
                                                                      out_size=out_size)
-                loss = sum([dur_loss, prior_loss, diff_loss])
+                loss = sum([prior_loss, diff_loss])
                 loss.backward()
 
                 enc_grad_norm = torch.nn.utils.clip_grad_norm_(model.encoder.parameters(),

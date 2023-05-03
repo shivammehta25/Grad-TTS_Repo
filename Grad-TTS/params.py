@@ -42,10 +42,10 @@ n_enc_layers = 6
 enc_kernel = 3
 enc_dropout = 0.1
 n_heads = 2
-window_size = 9 
+window_size = 4 
 
 # decoder parameters
-dec_dim = 64 
+dec_dim = 128 
 beta_min = 0.05
 beta_max = 20.0
 pe_scale = 1000  # 1 for `grad-tts-old.pt` checkpoint
