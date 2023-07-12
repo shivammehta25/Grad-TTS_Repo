@@ -6,19 +6,20 @@
 # MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
 # MIT License for more details.
 
-import numpy as np
-from tqdm import tqdm
+import argparse
 
+import numpy as np
 import torch
 from torch.utils.data import DataLoader
 from torch.utils.tensorboard import SummaryWriter
+from tqdm import tqdm
 
 import params
+from data import TextMelBatchCollate, TextMelDataset
 from model import GradTTS
-from data import TextMelDataset, TextMelBatchCollate
-from utils import plot_tensor, save_plot
 from text.symbols import symbols
-
+from utils import (compare_parameters, keep_top_k_checkpoints,
+                   module_to_namespace, plot_tensor, save_every_n, save_plot)
 
 train_filelist_path = params.train_filelist_path
 valid_filelist_path = params.valid_filelist_path
@@ -57,6 +58,16 @@ pe_scale = params.pe_scale
 
 
 if __name__ == "__main__":
+    
+    parser = argparse.ArgumentParser(description='Train GradTTS')
+    parser.add_argument('--resume_from_checkpoint', '-c', type=str, default=None, help='Resume from checkpoint')
+    parser.add_argument('-run_name', '-r', type=str, required=True, help='Name of the run')
+    args = parser.parse_args()      
+    
+    log_dir = log_dir.format(args.run_name)
+    print(f'Running : {args.run_name}')
+    
+    
     torch.manual_seed(random_seed)
     np.random.seed(random_seed)
 
@@ -70,7 +81,7 @@ if __name__ == "__main__":
     batch_collate = TextMelBatchCollate()
     loader = DataLoader(dataset=train_dataset, batch_size=batch_size,
                         collate_fn=batch_collate, drop_last=True,
-                        num_workers=4, shuffle=False)
+                        num_workers=20, shuffle=False)
     test_dataset = TextMelDataset(valid_filelist_path, cmudict_path, add_blank,
                                   n_fft, n_feats, sample_rate, hop_length,
                                   win_length, f_min, f_max)
@@ -93,9 +104,20 @@ if __name__ == "__main__":
         logger.add_image(f'image_{i}/ground_truth', plot_tensor(mel.squeeze()),
                          global_step=0, dataformats='HWC')
         save_plot(mel.squeeze(), f'{log_dir}/original_{i}.png')
-
+    
+    if args.resume_from_checkpoint is not None:
+        print('[*] Loading checkpoint from {}'.format(args.resume_from_checkpoint))
+        ckpt = torch.load(args.resume_from_checkpoint)    
+        model.load_state_dict(ckpt['model'])
+        optimizer.load_state_dict(ckpt['optimizer'])
+        compare_parameters(params, ckpt['params'])
+        iteration = ckpt['iteration']
+        start_epoch = ckpt['epoch'] 
+    else:
+        iteration = 0
+        start_epoch = 0 
+    
     print('Start training...')
-    iteration = 0
     for epoch in range(1, n_epochs + 1):
         model.train()
         dur_losses = []
@@ -171,5 +193,12 @@ if __name__ == "__main__":
                 save_plot(attn.squeeze().cpu(), 
                           f'{log_dir}/alignment_{i}.png')
 
-        ckpt = model.state_dict()
-        torch.save(ckpt, f=f"{log_dir}/grad_{epoch}.pt")
+        ckpt = {
+            'model': model.state_dict(),
+            'params': module_to_namespace(params),
+            'optimizer': optimizer.state_dict(),
+            'epoch': epoch,
+            'iteration': iteration,
+        }
+        keep_top_k_checkpoints(log_dir, ckpt, epoch, k=5)
+        save_every_n(log_dir, ckpt, epoch, n=100)
