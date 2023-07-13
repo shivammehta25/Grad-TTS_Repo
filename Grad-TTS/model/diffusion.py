@@ -7,8 +7,14 @@
 # MIT License for more details.
 
 import math
+from functools import partial
+
 import torch
+import torch.nn as nn
 from einops import rearrange
+from torch import Tensor
+from torch.distributions import Normal
+from zuko.utils import odeint
 
 from model.base import BaseModule
 
@@ -171,10 +177,13 @@ class GradLogPEstimator2d(BaseModule):
         self.final_block = Block(dim, dim)
         self.final_conv = torch.nn.Conv2d(dim, 1, 1)
 
-    def forward(self, x, mask, mu, t, spk=None):
+    def forward(self, t, x, mask, mu, spk=None):
+    # def forward(self, x, mask, mu, t, spk=None):
         if not isinstance(spk, type(None)):
             s = self.spk_mlp(spk)
-        
+        if t.ndim < 1:
+            t = t.unsqueeze(-1)
+
         t = self.time_pos_emb(t, scale=self.pe_scale)
         t = self.mlp(t)
 
@@ -292,3 +301,80 @@ class Diffusion(BaseModule):
                        requires_grad=False)
         t = torch.clamp(t, offset, 1.0 - offset)
         return self.loss_t(x0, mask, mu, t, spk)
+
+
+class CNF(BaseModule):
+    def __init__(
+        self,
+        n_feats, dim,
+        n_spks=1, spk_emb_dim=64,
+        beta_min=0.05, beta_max=20, pe_scale=1000,
+        frequencies: int = 3,
+        **kwargs,
+    ):
+        super().__init__()
+
+        self.net = GradLogPEstimator2d(dim, n_spks=n_spks,
+                                             spk_emb_dim=spk_emb_dim,
+                                             pe_scale=pe_scale) 
+
+        # self.register_buffer('frequencies', 2 ** torch.arange(frequencies) * torch.pi)
+
+    @torch.no_grad()
+    def forward(self, z, mask, mu, n_timesteps, stoc=False, spk=None):
+        net = partial(self.net, mask=mask, mu=mu)
+        return odeint(net, z, 1.0, 0.0, phi=self.parameters())
+
+    def encode(self, x: Tensor) -> Tensor:
+        return odeint(self, x, 0.0, 1.0, phi=self.parameters())
+
+    def decode(self, z: Tensor) -> Tensor:
+        return odeint(self, z, 1.0, 0.0, phi=self.parameters())
+
+    def log_prob(self, x: Tensor) -> Tensor:
+        I = torch.eye(x.shape[-1]).to(x)
+        I = I.expand(x.shape + x.shape[-1:]).movedim(-1, 0)
+
+        def augmented(t: Tensor, x: Tensor, ladj: Tensor) -> Tensor:
+            with torch.enable_grad():
+                x = x.requires_grad_()
+                dx = self(t, x)
+
+            jacobian = torch.autograd.grad(dx, x, I, is_grads_batched=True, create_graph=True)[0]
+            trace = torch.einsum('i...i', jacobian)
+
+            return dx, trace * 1e-2
+
+        ladj = torch.zeros_like(x[..., 0])
+        z, ladj = odeint(augmented, (x, ladj), 0.0, 1.0, phi=self.parameters())
+
+        return Normal(0.0, z.new_tensor(1.0)).log_prob(z).sum(dim=-1) + ladj * 1e2
+    
+    def compute_loss(self, x, mask, mu, spk=None, offset=1e-5):
+        # t = torch.rand_like(x[..., 0]).unsqueeze(-1)
+        t = torch.rand(x.shape[0], dtype=x.dtype, device=x.device,
+                       requires_grad=False)
+        t = rearrange(t, 'b -> b () ()')
+        z = mu
+        y = (1 - t) * x + (1e-4 + (1 - 1e-4) * t) * z
+        u = (1 - 1e-4) * z - x
+        v_out = self.net(t.squeeze(), y, mask, mu)
+        return (v_out - u).square().mean(), y
+        
+        # t = torch.rand(x0.shape[0], dtype=x0.dtype, device=x0.device,
+        #                requires_grad=False)
+        # t = torch.clamp(t, offset, 1.0 - offset)
+        # return self.loss_t(x0, mask, mu, t, spk)
+
+
+class FlowMatchingLoss(BaseModule):
+    def __init__(self):
+        super().__init__()
+
+    def forward(self, v: BaseModule, x: Tensor) -> Tensor:
+        t = torch.rand_like(x[..., 0]).unsqueeze(-1)
+        z = torch.randn_like(x)
+        y = (1 - t) * x + (1e-4 + (1 - 1e-4) * t) * z
+        u = (1 - 1e-4) * z - x
+
+        return (self.v(t.squeeze(-1), y) - u).square().mean()
