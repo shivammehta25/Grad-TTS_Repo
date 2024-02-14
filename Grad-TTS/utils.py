@@ -5,12 +5,13 @@
 # but WITHOUT ANY WARRANTY; without even the implied warranty of
 # MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
 # MIT License for more details.
-
-import os
 import glob
-import numpy as np
-import matplotlib.pyplot as plt
+import os
+from argparse import Namespace
+from pathlib import Path
 
+import matplotlib.pyplot as plt
+import numpy as np
 import torch
 
 
@@ -73,3 +74,73 @@ def save_plot(tensor, savepath):
     plt.savefig(savepath)
     plt.close()
     return
+
+
+
+def get_dir_without_underscore(variable):
+    return [x for x in dir(variable) if x[0] != "_"]
+
+def recursively_change_tensor_to_list(variable):
+    if isinstance(variable, torch.Tensor):
+        return variable.tolist()
+    elif isinstance(variable, dict):
+        return {key: recursively_change_tensor_to_list(value) for key, value in variable.items()}
+    elif isinstance(variable, list):
+        return [recursively_change_tensor_to_list(value) for value in variable]
+    else:
+        return variable
+    
+
+def compare_parameters(new, old):
+    new_parameters = {}
+    modified_parameters = {}
+    new_params = get_dir_without_underscore(new)
+    old_params = get_dir_without_underscore(old)
+    for param in new_params:
+        if param in old_params:
+            new_param = recursively_change_tensor_to_list(getattr(new, param))
+            old_param = recursively_change_tensor_to_list(getattr(old, param))
+
+            if new_param != old_param:
+                modified_parameters[param] = {
+                    'new': new_param,
+                    'old': old_param
+                    }
+            old_params.remove(param)
+        else:
+            new_parameters[param] = new_param
+    
+    if len(modified_parameters) > 0: 
+        print('Modified parameters:')
+        for key, param in modified_parameters.items():
+            print(f"\t{key}:")
+            print(f"\t\tOld: {param['old']}")
+            print(f"\t\tNew: {param['new']}")
+    
+    if len(new_parameters) > 0:
+        print('New parameters:')
+        for key, param in new_parameters.items():
+            print(f"\t{key}:")
+            print(f"\t\t{param}")
+    
+    if len(old_params) > 0:
+        print('Removed parameters:')
+        for param in old_params:
+            print(f"\t{param} : {getattr(old, param)}")
+            
+
+def module_to_namespace(module, modules_to_ignore=('torch', 'torch.nn', 'torch.nn.functional', 'warnings')):
+    return Namespace(**{k: getattr(module, k) for k in get_dir_without_underscore(module) if not k.startswith('_') and k not in modules_to_ignore})
+
+
+def keep_top_k_checkpoints(logdir, checkpoint_dict, epoch, k=5):
+    if k is not None:
+        sorted_files = sorted(list(Path(logdir).glob('grad_*.pt')), key=lambda x: int(str(x.stem).split('_')[1]), reverse=True)
+        for file in sorted_files[k - 1:]:
+            file.unlink()
+    torch.save(checkpoint_dict, Path(logdir) / f'grad_{epoch}.pt')
+    
+    
+def save_every_n(logdir, checkpoint_dict, epoch, n=100):
+    if epoch % n == 0:
+        torch.save(checkpoint_dict, Path(logdir) / f'epoch_{epoch}.pt')

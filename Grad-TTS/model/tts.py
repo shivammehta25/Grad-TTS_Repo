@@ -13,15 +13,16 @@ import torch
 
 from model import monotonic_align
 from model.base import BaseModule
-from model.text_encoder import TextEncoder
 from model.diffusion import Diffusion
-from model.utils import sequence_mask, generate_path, duration_loss, fix_len_compatibility
+from model.text_encoder import DP, TextEncoder
+from model.utils import (duration_loss, fix_len_compatibility, generate_path,
+                         sequence_mask)
 
 
 class GradTTS(BaseModule):
     def __init__(self, n_vocab, n_spks, spk_emb_dim, n_enc_channels, filter_channels, filter_channels_dp, 
                  n_heads, n_enc_layers, enc_kernel, enc_dropout, window_size, 
-                 n_feats, dec_dim, beta_min, beta_max, pe_scale):
+                 n_feats, dec_dim, beta_min, beta_max, pe_scale, dur_pred_type):
         super(GradTTS, self).__init__()
         self.n_vocab = n_vocab
         self.n_spks = n_spks
@@ -45,6 +46,9 @@ class GradTTS(BaseModule):
         self.encoder = TextEncoder(n_vocab, n_feats, n_enc_channels, 
                                    filter_channels, filter_channels_dp, n_heads, 
                                    n_enc_layers, enc_kernel, enc_dropout, window_size)
+        
+        self.dp = DP(dur_pred_type, n_enc_channels, filter_channels_dp, enc_kernel, enc_dropout, spk_emb_dim, n_spks) 
+        
         self.decoder = Diffusion(n_feats, dec_dim, n_spks, spk_emb_dim, beta_min, beta_max, pe_scale)
 
     @torch.no_grad()
@@ -72,7 +76,8 @@ class GradTTS(BaseModule):
             spk = self.spk_emb(spk)
 
         # Get encoder_outputs `mu_x` and log-scaled token durations `logw`
-        mu_x, logw, x_mask = self.encoder(x, x_lengths, spk)
+        mu_x, enc_output, x_mask = self.encoder(x, x_lengths, spk)
+        logw = self.dp(enc_output, x_mask)
 
         w = torch.exp(logw) * x_mask
         w_ceil = torch.ceil(w) * length_scale
@@ -120,7 +125,7 @@ class GradTTS(BaseModule):
             spk = self.spk_emb(spk)
         
         # Get encoder_outputs `mu_x` and log-scaled token durations `logw`
-        mu_x, logw, x_mask = self.encoder(x, x_lengths, spk)
+        mu_x, enc_output, x_mask = self.encoder(x, x_lengths, spk)
         y_max_length = y.shape[-1]
 
         y_mask = sequence_mask(y_lengths, y_max_length).unsqueeze(1).to(x_mask)
@@ -140,7 +145,7 @@ class GradTTS(BaseModule):
 
         # Compute loss between predicted log-scaled durations and those obtained from MAS
         logw_ = torch.log(1e-8 + torch.sum(attn.unsqueeze(1), -1)) * x_mask
-        dur_loss = duration_loss(logw, logw_, x_lengths)
+        dur_loss = self.dp.compute_loss(logw_, enc_output, x_mask)
 
         # Cut a small segment of mel-spectrogram in order to increase batch size
         if not isinstance(out_size, type(None)):

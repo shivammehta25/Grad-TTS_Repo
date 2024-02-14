@@ -9,9 +9,9 @@
 from model.utils import fix_len_compatibility
 
 # data parameters
-train_filelist_path = 'data/filelists/ljs_audio_text_train_filelist.txt'
-valid_filelist_path = 'data/filelists/ljs_audio_text_val_filelist.txt'
-test_filelist_path = 'data/filelists/ljs_audio_text_test_filelist.txt'
+train_filelist_path = 'data/filelists/cormac_train.txt'
+valid_filelist_path = 'data/filelists/cormac_val.txt'
+test_filelist_path = 'data/filelists/cormac_val.txt'
 cmudict_path = 'resources/cmu_dictionary'
 add_blank = True
 n_feats = 80
@@ -34,6 +34,8 @@ enc_kernel = 3
 enc_dropout = 0.1
 n_heads = 2
 window_size = 4
+dur_pred_type = 'det'
+
 
 # decoder parameters
 dec_dim = 64
@@ -42,10 +44,10 @@ beta_max = 20.0
 pe_scale = 1000  # 1 for `grad-tts-old.pt` checkpoint
 
 # training parameters
-log_dir = 'logs/new_exp'
+log_dir = 'logs/{}'
 test_size = 4
-n_epochs = 10000
-batch_size = 16
+n_epochs = 3200 
+batch_size = 32 
 learning_rate = 1e-4
 seed = 37
 save_every = 1
