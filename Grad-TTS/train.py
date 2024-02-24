@@ -168,6 +168,11 @@ if __name__ == "__main__":
                     progress_bar.set_description(msg)
                 
                 iteration += 1
+                
+                if iteration > 400000:
+                    # Temp stop training flag
+                    epoch = n_epochs
+                    
 
         log_msg = 'Epoch %d: duration loss = %.3f ' % (epoch, np.mean(dur_losses))
         log_msg += '| prior loss = %.3f ' % np.mean(prior_losses)

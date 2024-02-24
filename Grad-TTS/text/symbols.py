@@ -1,14 +1,17 @@
-""" from https://github.com/keithito/tacotron """
+""" from https://github.com/keithito/tacotron
 
-from text import cmudict
+Defines the set of symbols used in text input to the model.
+"""
+_pad = "_"
+_punctuation = ';:,.!?¡¿—…"«»“” '
+_letters = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz"
+_letters_ipa = (
+    "ɑɐɒæɓʙβɔɕçɗɖðʤəɘɚɛɜɝɞɟʄɡɠɢʛɦɧħɥʜɨɪʝɭɬɫɮʟɱɯɰŋɳɲɴøɵɸθœɶʘɹɺɾɻʀʁɽʂʃʈʧʉʊʋⱱʌɣɤʍχʎʏʑʐʒʔʡʕʢǀǁǂǃˈˌːˑʼʴʰʱʲʷˠˤ˞↓↑→↗↘'̩'ᵻ"
+)
 
-_pad        = '_'
-_punctuation = '!\'(),.:;? '
-_special = '-'
-_letters = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz'
-
-# Prepend "@" to ARPAbet symbols to ensure uniqueness:
-_arpabet = ['@' + s for s in cmudict.valid_symbols]
 
 # Export all symbols:
-symbols = [_pad] + list(_special) + list(_punctuation) + list(_letters) + _arpabet
+symbols = [_pad] + list(_punctuation) + list(_letters) + list(_letters_ipa)
+
+# Special symbol ids
+SPACE_ID = symbols.index(" ")

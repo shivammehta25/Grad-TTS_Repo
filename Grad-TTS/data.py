@@ -7,18 +7,18 @@
 # MIT License for more details.
 
 import random
-import numpy as np
+import sys
 
+import numpy as np
 import torch
 import torchaudio as ta
 
-from text import text_to_sequence, cmudict
-from text.symbols import symbols
-from utils import parse_filelist, intersperse
 from model.utils import fix_len_compatibility
 from params import seed as random_seed
+from text import cmudict, text_to_sequence
+from text.symbols import symbols
+from utils import intersperse, parse_filelist
 
-import sys
 sys.path.insert(0, 'hifi-gan')
 from meldataset import mel_spectrogram
 
@@ -54,9 +54,9 @@ class TextMelDataset(torch.utils.data.Dataset):
         return mel
 
     def get_text(self, text, add_blank=True):
-        text_norm = text_to_sequence(text, dictionary=self.cmudict)
+        text_norm = text_to_sequence(text, ['english_cleaners2'])
         if self.add_blank:
-            text_norm = intersperse(text_norm, len(symbols))  # add a blank token, whose id number is len(symbols)
+            text_norm = intersperse(text_norm, 0) 
         text_norm = torch.IntTensor(text_norm)
         return text_norm
 
@@ -133,9 +133,9 @@ class TextMelSpeakerDataset(torch.utils.data.Dataset):
         return mel
 
     def get_text(self, text, add_blank=True):
-        text_norm = text_to_sequence(text, dictionary=self.cmudict)
+        text_norm = text_to_sequence(text, ['english_cleaners2'])
         if self.add_blank:
-            text_norm = intersperse(text_norm, len(symbols))  # add a blank token, whose id number is len(symbols)
+            text_norm = intersperse(text_norm, 0)  # add a blank token, whose id number is len(symbols)
         text_norm = torch.LongTensor(text_norm)
         return text_norm
 

@@ -255,7 +255,7 @@ class Diffusion(BaseModule):
     @torch.no_grad()
     def reverse_diffusion(self, z, mask, mu, n_timesteps, stoc=False, spk=None):
         
-        # return self.fast_maximum_likelihood_reverse_diffusion(z, mask, mu, n_timesteps, stoc, spk)
+        return self.fast_maximum_likelihood_reverse_diffusion(z, mask, mu, 5, stoc, spk)
         # print("Using original reverse diffusion")
         h = 1.0 / n_timesteps
         xt = z * mask
